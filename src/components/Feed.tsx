@@ -51,13 +51,13 @@ export const Feed: React.FC<FeedProps> = ({ user }) => {
           />
         </div>
         <div className="flex items-center justify-between pt-2 border-t border-white/5">
-          <button className="p-2 hover:bg-white/5 rounded-xl text-slate-400 transition-colors">
+          <button className="p-2 hover:bg-white/5 rounded-xl text-blue-400 transition-colors">
             <ImageIcon className="w-5 h-5" />
           </button>
           <button 
             onClick={handleCreatePost}
             disabled={isPosting || !newPostText.trim()}
-            className="px-6 py-2 bg-rose-500 text-white rounded-xl font-bold text-sm disabled:opacity-50 flex items-center gap-2"
+            className="px-6 py-2 bg-sky-500 text-white rounded-xl font-bold text-sm disabled:opacity-50 flex items-center gap-2"
           >
             Post <Send className="w-4 h-4" />
           </button>
@@ -79,12 +79,12 @@ export const Feed: React.FC<FeedProps> = ({ user }) => {
               </div>
               <div>
                 <h4 className="font-bold text-sm">{post.authorName}</h4>
-                <span className="text-[10px] text-slate-500">2 hours ago</span>
+                <span className="text-[10px] text-blue-500">2 hours ago</span>
               </div>
             </div>
             
             <div className="px-4 pb-4">
-              <p className="text-sm text-slate-200 leading-relaxed">{post.text}</p>
+              <p className="text-sm text-blue-200 leading-relaxed">{post.text}</p>
             </div>
 
             {post.imageUrl && (
@@ -96,16 +96,16 @@ export const Feed: React.FC<FeedProps> = ({ user }) => {
             <div className="p-4 border-t border-white/5 flex items-center gap-6">
               <button 
                 onClick={() => feedService.toggleLike(post.id, user.uid, post.likes?.includes(user.uid))}
-                className={`flex items-center gap-2 text-sm transition-colors ${post.likes?.includes(user.uid) ? 'text-rose-500' : 'text-slate-400 hover:text-white'}`}
+                className={`flex items-center gap-2 text-sm transition-colors ${post.likes?.includes(user.uid) ? 'text-sky-500' : 'text-blue-400 hover:text-white'}`}
               >
                 <Heart className={`w-5 h-5 ${post.likes?.includes(user.uid) ? 'fill-current' : ''}`} />
                 <span>{post.likes?.length || 0}</span>
               </button>
-              <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+              <button className="flex items-center gap-2 text-sm text-blue-400 hover:text-white transition-colors">
                 <MessageSquare className="w-5 h-5" />
                 <span>{post.comments?.length || 0}</span>
               </button>
-              <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors ml-auto">
+              <button className="flex items-center gap-2 text-sm text-blue-400 hover:text-white transition-colors ml-auto">
                 <Share2 className="w-5 h-5" />
               </button>
             </div>

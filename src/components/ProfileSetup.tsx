@@ -48,7 +48,7 @@ export const ProfileSetup: React.FC<ProfileSetupProps> = ({ user }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-blue-950 flex items-center justify-center p-4">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -56,22 +56,22 @@ export const ProfileSetup: React.FC<ProfileSetupProps> = ({ user }) => {
       >
         <div className="text-center space-y-2">
           <div className="flex justify-center">
-            <div className="w-12 h-12 bg-rose-500 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-sky-500 rounded-xl flex items-center justify-center">
               <Sparkles className="text-white w-6 h-6" />
             </div>
           </div>
           <h2 className="text-3xl font-bold tracking-tight">Create Profile</h2>
-          <p className="text-slate-400">Step {step} of 3</p>
+          <p className="text-blue-400">Step {step} of 3</p>
         </div>
 
         {step === 1 && (
           <div className="space-y-6">
             <div className="flex justify-center">
               <div className="relative group">
-                <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-rose-500/30 group-hover:border-rose-500 transition-colors">
+                <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-sky-500/30 group-hover:border-sky-500 transition-colors">
                   <img src={formData.photoURL || `https://picsum.photos/seed/${user.uid}/200/200`} alt="Avatar" className="w-full h-full object-cover" />
                 </div>
-                <button className="absolute bottom-0 right-0 p-2 bg-rose-500 rounded-full text-white shadow-lg">
+                <button className="absolute bottom-0 right-0 p-2 bg-sky-500 rounded-full text-white shadow-lg">
                   <Camera className="w-5 h-5" />
                 </button>
               </div>
@@ -82,19 +82,19 @@ export const ProfileSetup: React.FC<ProfileSetupProps> = ({ user }) => {
                 placeholder="Full Name"
                 value={formData.fullName}
                 onChange={e => setFormData({ ...formData, fullName: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:border-rose-500/50"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:border-sky-500/50"
               />
               <input 
                 type="number" 
                 placeholder="Age"
                 value={formData.age}
                 onChange={e => setFormData({ ...formData, age: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:border-rose-500/50"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:border-sky-500/50"
               />
               <select 
                 value={formData.gender}
                 onChange={e => setFormData({ ...formData, gender: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:border-rose-500/50 appearance-none"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:border-sky-500/50 appearance-none"
               >
                 <option value="" disabled>Select Gender</option>
                 <option value="male">Male</option>
@@ -104,7 +104,7 @@ export const ProfileSetup: React.FC<ProfileSetupProps> = ({ user }) => {
             </div>
             <button 
               onClick={() => setStep(2)}
-              className="w-full py-4 bg-rose-500 text-white rounded-2xl font-bold hover:bg-rose-600 transition-colors"
+              className="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold hover:bg-sky-600 transition-colors"
             >
               Next Step
             </button>
@@ -121,8 +121,8 @@ export const ProfileSetup: React.FC<ProfileSetupProps> = ({ user }) => {
                   onClick={() => handleToggleInterest(interest)}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                     formData.interests.includes(interest)
-                      ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
-                      : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                      ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
+                      : 'bg-white/5 text-blue-400 hover:bg-white/10'
                   }`}
                 >
                   {interest}
@@ -131,7 +131,7 @@ export const ProfileSetup: React.FC<ProfileSetupProps> = ({ user }) => {
             </div>
             <div className="flex gap-4">
               <button onClick={() => setStep(1)} className="flex-1 py-4 glass rounded-2xl font-bold">Back</button>
-              <button onClick={() => setStep(3)} className="flex-1 py-4 bg-rose-500 text-white rounded-2xl font-bold">Next</button>
+              <button onClick={() => setStep(3)} className="flex-1 py-4 bg-sky-500 text-white rounded-2xl font-bold">Next</button>
             </div>
           </div>
         )}
@@ -143,11 +143,11 @@ export const ProfileSetup: React.FC<ProfileSetupProps> = ({ user }) => {
               placeholder="Write a short bio..."
               value={formData.bio}
               onChange={e => setFormData({ ...formData, bio: e.target.value })}
-              className="w-full h-32 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:border-rose-500/50 resize-none"
+              className="w-full h-32 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:border-sky-500/50 resize-none"
             />
             <div className="flex gap-4">
               <button onClick={() => setStep(2)} className="flex-1 py-4 glass rounded-2xl font-bold">Back</button>
-              <button onClick={handleSubmit} className="flex-1 py-4 bg-rose-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2">
+              <button onClick={handleSubmit} className="flex-1 py-4 bg-sky-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2">
                 Complete <Heart className="w-5 h-5 fill-current" />
               </button>
             </div>
