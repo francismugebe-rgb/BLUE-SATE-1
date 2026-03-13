@@ -4,8 +4,25 @@ import { Server } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import dotenv from "dotenv";
+import admin from "firebase-admin";
 
 dotenv.config();
+
+// Initialize Firebase Admin
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    console.log("Firebase Admin initialized with service account.");
+  } else {
+    admin.initializeApp();
+    console.log("Firebase Admin initialized with default credentials.");
+  }
+} catch (error) {
+  console.error("Firebase Admin initialization failed:", error);
+}
 
 async function startServer() {
   const app = express();
@@ -17,6 +34,24 @@ async function startServer() {
   });
 
   const PORT = 3000;
+
+  // Authentication Middleware
+  const authenticate = async (req: any, res: any, next: any) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized: No token provided" });
+    }
+
+    const idToken = authHeader.split("Bearer ")[1];
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      req.user = decodedToken;
+      next();
+    } catch (error) {
+      console.error("Error verifying ID token:", error);
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+    }
+  };
 
   // Socket.io logic
   io.on("connection", (socket) => {
@@ -60,8 +95,13 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
+  // Protected User Route
+  app.get("/api/me", authenticate, (req: any, res) => {
+    res.json({ user: req.user });
+  });
+
   // AI Matching Endpoint (Example)
-  app.post("/api/match-score", (req, res) => {
+  app.post("/api/match-score", authenticate, (req: any, res) => {
     const { user1, user2 } = req.body;
     // Simple compatibility logic
     const score = Math.floor(Math.random() * 40) + 60; // 60-100

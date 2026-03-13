@@ -85,18 +85,6 @@ const App: React.FC = () => {
 
   const [compatibility, setCompatibility] = useState<{ score: number, reason: string } | null>(null);
 
-  useEffect(() => {
-    if (currentCandidate && user) {
-      const getCompatibility = async () => {
-        const result = await geminiService.calculateCompatibility(user, currentCandidate);
-        setCompatibility(result);
-      };
-      getCompatibility();
-    } else {
-      setCompatibility(null);
-    }
-  }, [currentCandidate, user]);
-
   const handleSwipe = async (direction: 'right' | 'left') => {
     const target = potentialMatches[currentIndex];
     if (!target) return;
@@ -167,6 +155,18 @@ const App: React.FC = () => {
   }
 
   const currentCandidate = potentialMatches[currentIndex];
+
+  useEffect(() => {
+    if (currentCandidate && user) {
+      const getCompatibility = async () => {
+        const result = await geminiService.calculateCompatibility(user, currentCandidate);
+        setCompatibility(result);
+      };
+      getCompatibility();
+    } else {
+      setCompatibility(null);
+    }
+  }, [currentCandidate, user]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col overflow-hidden">
