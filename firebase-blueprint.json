@@ -1,82 +1,95 @@
 {
   "entities": {
-    "User": {
+    "users": {
       "title": "User",
-      "description": "A user profile in the dating network",
+      "description": "User profile and settings",
       "type": "object",
       "properties": {
-        "uid": { "type": "string", "description": "Firebase Auth UID" },
-        "fullName": { "type": "string" },
-        "username": { "type": "string" },
-        "email": { "type": "string", "format": "email" },
-        "phone": { "type": "string" },
-        "gender": { "type": "string", "enum": ["male", "female", "non-binary", "other"] },
-        "interestedIn": { "type": "array", "items": { "type": "string" } },
-        "age": { "type": "integer" },
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "age": { "type": "number" },
+        "gender": { "type": "string" },
+        "location": { "type": "string" },
         "bio": { "type": "string" },
         "interests": { "type": "array", "items": { "type": "string" } },
         "photos": { "type": "array", "items": { "type": "string" } },
-        "videoIntro": { "type": "string" },
-        "location": { "type": "object", "properties": { "city": { "type": "string" }, "country": { "type": "string" }, "lat": { "type": "number" }, "lng": { "type": "number" } } },
-        "verificationStatus": { "type": "string", "enum": ["none", "pending", "verified"] },
-        "premiumType": { "type": "string", "enum": ["free", "premium", "vip"] },
-        "popularityScore": { "type": "number" },
-        "profileViews": { "type": "integer" },
-        "lastSeen": { "type": "string", "format": "date-time" },
-        "online": { "type": "boolean" },
+        "relationshipPreference": { "type": "string" },
+        "occupation": { "type": "string" },
+        "height": { "type": "number" },
+        "lifestyle": { "type": "array", "items": { "type": "string" } },
+        "matches": { "type": "array", "items": { "type": "string" } },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "dislikes": { "type": "array", "items": { "type": "string" } },
+        "followers": { "type": "array", "items": { "type": "string" } },
+        "following": { "type": "array", "items": { "type": "string" } },
+        "role": { "type": "string", "enum": ["user", "admin"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "fullName", "username", "gender", "age"]
+      "required": ["uid", "name", "email", "role"]
     },
-    "Match": {
-      "title": "Match",
-      "description": "A mutual match between two users",
-      "type": "object",
-      "properties": {
-        "users": { "type": "array", "items": { "type": "string" }, "description": "Array of two user UIDs" },
-        "compatibilityScore": { "type": "number" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "lastMessageAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["users", "createdAt"]
-    },
-    "Message": {
-      "title": "Message",
-      "description": "A chat message",
-      "type": "object",
-      "properties": {
-        "matchId": { "type": "string" },
-        "senderId": { "type": "string" },
-        "receiverId": { "type": "string" },
-        "text": { "type": "string" },
-        "mediaUrl": { "type": "string" },
-        "mediaType": { "type": "string", "enum": ["image", "video", "voice"] },
-        "seen": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["matchId", "senderId", "receiverId", "createdAt"]
-    },
-    "Post": {
+    "posts": {
       "title": "Post",
-      "description": "A social feed post",
+      "description": "Social feed post",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
         "authorName": { "type": "string" },
         "authorPhoto": { "type": "string" },
-        "text": { "type": "string" },
-        "mediaUrls": { "type": "array", "items": { "type": "string" } },
-        "likesCount": { "type": "integer" },
-        "commentsCount": { "type": "integer" },
+        "content": { "type": "string" },
+        "image": { "type": "string" },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "comments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "userId": { "type": "string" },
+              "userName": { "type": "string" },
+              "comment": { "type": "string" },
+              "createdAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "createdAt"]
+      "required": ["userId", "content", "createdAt"]
+    },
+    "messages": {
+      "title": "Message",
+      "description": "Private message between users",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "text": { "type": "string" },
+        "image": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chatId", "senderId", "receiverId", "text", "createdAt"]
+    },
+    "notifications": {
+      "title": "Notification",
+      "description": "User notification",
+      "type": "object",
+      "properties": {
+        "receiverId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "type": { "type": "string", "enum": ["match", "message", "like", "comment", "follow"] },
+        "relatedId": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["receiverId", "type", "createdAt"]
     }
   },
   "firestore": {
-    "/users/{userId}": { "schema": "User", "description": "User profiles" },
-    "/matches/{matchId}": { "schema": "Match", "description": "Mutual matches" },
-    "/matches/{matchId}/messages/{messageId}": { "schema": "Message", "description": "Messages within a match" },
-    "/posts/{postId}": { "schema": "Post", "description": "Social feed posts" }
+    "users": { "schema": "users", "description": "User profiles" },
+    "posts": { "schema": "posts", "description": "Social feed posts" },
+    "chats/{chatId}/messages": { "schema": "messages", "description": "Messages within a chat" },
+    "notifications": { "schema": "notifications", "description": "User notifications" }
   }
 }

@@ -1,28 +1,12 @@
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { createServer as createViteServer } from "vite";
 import path from "path";
-import dotenv from "dotenv";
-import admin from "firebase-admin";
+import { fileURLToPath } from "url";
+import { createServer as createViteServer } from "vite";
 
-dotenv.config();
-
-// Initialize Firebase Admin
-try {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    console.log("Firebase Admin initialized with service account.");
-  } else {
-    admin.initializeApp();
-    console.log("Firebase Admin initialized with default credentials.");
-  }
-} catch (error) {
-  console.error("Firebase Admin initialization failed:", error);
-}
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
@@ -35,77 +19,39 @@ async function startServer() {
 
   const PORT = 3000;
 
-  // Authentication Middleware
-  const authenticate = async (req: any, res: any, next: any) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
-    }
-
-    const idToken = authHeader.split("Bearer ")[1];
-    try {
-      const decodedToken = await admin.auth().verifyIdToken(idToken);
-      req.user = decodedToken;
-      next();
-    } catch (error) {
-      console.error("Error verifying ID token:", error);
-      res.status(401).json({ error: "Unauthorized: Invalid token" });
-    }
-  };
+  app.use(express.json());
 
   // Socket.io logic
   io.on("connection", (socket) => {
-    console.log("A user connected:", socket.id);
+    console.log("User connected:", socket.id);
 
-    socket.on("join-room", (roomId) => {
-      socket.join(roomId);
-      console.log(`User ${socket.id} joined room ${roomId}`);
+    socket.on("join_chat", (chatId) => {
+      socket.join(chatId);
+      console.log(`User joined chat: ${chatId}`);
     });
 
-    socket.on("send-message", (data) => {
-      // data: { roomId, senderId, text, ... }
-      io.to(data.roomId).emit("receive-message", data);
-    });
-
-    socket.on("typing", (data) => {
-      socket.to(data.roomId).emit("user-typing", data);
-    });
-
-    socket.on("call-user", (data) => {
-      socket.to(data.to).emit("incoming-call", {
-        from: socket.id,
-        signal: data.signalData,
-        callerId: data.callerId,
+    socket.on("send_message", (data) => {
+      // data: { chatId, senderId, receiverId, text, createdAt }
+      io.to(data.chatId).emit("receive_message", data);
+      io.emit("notification", {
+        receiverId: data.receiverId,
+        type: "message",
+        senderId: data.senderId,
       });
     });
 
-    socket.on("answer-call", (data) => {
-      socket.to(data.to).emit("call-accepted", data.signal);
+    socket.on("typing", (data) => {
+      socket.to(data.chatId).emit("user_typing", data);
     });
 
     socket.on("disconnect", () => {
-      console.log("User disconnected:", socket.id);
+      console.log("User disconnected");
     });
   });
 
   // API Routes
-  app.use(express.json());
-
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
-  });
-
-  // Protected User Route
-  app.get("/api/me", authenticate, (req: any, res) => {
-    res.json({ user: req.user });
-  });
-
-  // AI Matching Endpoint (Example)
-  app.post("/api/match-score", authenticate, (req: any, res) => {
-    const { user1, user2 } = req.body;
-    // Simple compatibility logic
-    const score = Math.floor(Math.random() * 40) + 60; // 60-100
-    res.json({ score });
+    res.json({ status: "ok", message: "HeartConnect API is running" });
   });
 
   // Vite middleware for development
@@ -124,7 +70,7 @@ async function startServer() {
   }
 
   httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 

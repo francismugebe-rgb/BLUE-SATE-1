@@ -1,17 +1,10 @@
 import React from 'react';
-import { Provider } from 'react-redux';
-import { store } from './store';
-import { AuthProvider } from './AuthProvider';
+import ReactDOM from 'react-dom/client';
 import App from './App';
+import './index.css';
 
-const Root: React.FC = () => {
-  return (
-    <Provider store={store}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </Provider>
-  );
-};
-
-export default Root;
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
