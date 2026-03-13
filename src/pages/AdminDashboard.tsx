@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { UserProfile, Post } from '../types';
-import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle } from 'lucide-react';
+import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const AdminDashboard: React.FC = () => {
@@ -27,6 +27,18 @@ const AdminDashboard: React.FC = () => {
     };
     fetchData();
   }, []);
+
+  const handlePromote = async (userId: string) => {
+    if (!window.confirm("Are you sure you want to promote this user to admin?")) return;
+    try {
+      await updateDoc(doc(db, 'users', userId), { role: 'admin' });
+      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, role: 'admin' } : u));
+      alert("User promoted to admin successfully!");
+    } catch (err) {
+      console.error("Promotion error:", err);
+      alert("Failed to promote user.");
+    }
+  };
 
   const handleDeletePost = async (postId: string) => {
     if (!window.confirm("Are you sure you want to delete this post?")) return;
@@ -99,6 +111,15 @@ const AdminDashboard: React.FC = () => {
                     </td>
                     <td className="px-8 py-4">
                       <div className="flex gap-2">
+                        {user.role !== 'admin' && (
+                          <button 
+                            onClick={() => handlePromote(user.uid)}
+                            className="p-2 text-slate-400 hover:text-emerald-500 transition-colors"
+                            title="Promote to Admin"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                          </button>
+                        )}
                         <button className="p-2 text-slate-400 hover:text-orange-500 transition-colors"><Ban className="w-4 h-4" /></button>
                         <button className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
                       </div>

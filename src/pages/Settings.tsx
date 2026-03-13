@@ -1,11 +1,13 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Bell, Lock, Eye, Trash2, ChevronRight } from 'lucide-react';
+import { Shield, Bell, Lock, Eye, Trash2, ChevronRight, ShieldCheck } from 'lucide-react';
 
 const Settings: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
+  const navigate = useNavigate();
 
-  const sections = [
+  const sections: { title: string, items: { icon: any, label: string, desc: string, action?: () => void }[] }[] = [
     {
       title: 'Account Settings',
       items: [
@@ -22,6 +24,20 @@ const Settings: React.FC = () => {
     }
   ];
 
+  if (isAdmin) {
+    sections.push({
+      title: 'Administration',
+      items: [
+        { 
+          icon: ShieldCheck, 
+          label: 'Admin Panel', 
+          desc: 'Access the management dashboard',
+          action: () => navigate('/admin')
+        },
+      ]
+    });
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-3xl font-bold text-slate-900 mb-8">Settings</h2>
@@ -34,6 +50,7 @@ const Settings: React.FC = () => {
               {section.items.map((item, i) => (
                 <button 
                   key={i}
+                  onClick={item.action}
                   className="w-full flex items-center justify-between p-6 hover:bg-slate-50 transition-all border-b border-slate-50 last:border-0 group"
                 >
                   <div className="flex items-center gap-4">

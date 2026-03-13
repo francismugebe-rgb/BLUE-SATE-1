@@ -22,11 +22,12 @@ const Register: React.FC = () => {
       const user = userCredential.user;
 
       // Create user profile in Firestore
+      const adminEmail = (import.meta as any).env.VITE_ADMIN_EMAIL || 'FRANCISMUGEBE@gmail.com';
       await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
         name,
         email,
-        role: 'user',
+        role: email === adminEmail ? 'admin' : 'user',
         createdAt: new Date().toISOString(),
         interests: [],
         photos: [`https://picsum.photos/seed/${user.uid}/400/400`],
