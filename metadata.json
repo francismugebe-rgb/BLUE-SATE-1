@@ -1,0 +1,5 @@
+{
+  "name": "Bluesate",
+  "description": "Enterprise-grade dating and social network platform featuring AI matching, real-time chat, video calls, and a social feed.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"]
+}
