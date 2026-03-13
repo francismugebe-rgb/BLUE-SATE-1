@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, onSnapshot, getDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile } from '../types';
 
 interface AuthContextType {
@@ -29,6 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (firebaseUser) {
         // Listen to profile changes
+        const path = `users/${firebaseUser.uid}`;
         const profileRef = doc(db, 'users', firebaseUser.uid);
         const unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
           if (docSnap.exists()) {
@@ -38,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           setLoading(false);
         }, (error) => {
-          console.error("Profile snapshot error:", error);
+          handleFirestoreError(error, OperationType.GET, path);
           setLoading(false);
         });
         

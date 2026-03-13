@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Post } from '../types';
 import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -20,7 +20,7 @@ const AdminDashboard: React.FC = () => {
         setUsers(usersSnap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
         setPosts(postsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Post)));
       } catch (err) {
-        console.error("Admin fetch error:", err);
+        handleFirestoreError(err, OperationType.GET, 'admin_dashboard_fetch');
       } finally {
         setLoading(false);
       }
@@ -35,15 +35,18 @@ const AdminDashboard: React.FC = () => {
       setUsers(prev => prev.map(u => u.uid === userId ? { ...u, role: 'admin' } : u));
       alert("User promoted to admin successfully!");
     } catch (err) {
-      console.error("Promotion error:", err);
-      alert("Failed to promote user.");
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
     }
   };
 
   const handleDeletePost = async (postId: string) => {
     if (!window.confirm("Are you sure you want to delete this post?")) return;
-    await deleteDoc(doc(db, 'posts', postId));
-    setPosts(prev => prev.filter(p => p.id !== postId));
+    try {
+      await deleteDoc(doc(db, 'posts', postId));
+      setPosts(prev => prev.filter(p => p.id !== postId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `posts/${postId}`);
+    }
   };
 
   if (loading) return <div className="p-8">Loading dashboard...</div>;

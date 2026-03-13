@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Message, UserProfile } from '../types';
 import { Send, Image as ImageIcon, ChevronLeft, MoreVertical, Smile, MessageCircle } from 'lucide-react';
@@ -41,13 +41,17 @@ const Chat: React.FC = () => {
     
     const fetchChats = async () => {
       const matches = profile.matches || [];
-      const chatList = await Promise.all(matches.map(async (matchId) => {
-        const userDoc = await getDoc(doc(db, 'users', matchId));
-        const otherUserData = userDoc.data() as UserProfile;
-        const id = [profile.uid, matchId].sort().join('_');
-        return { id, otherUser: otherUserData };
-      }));
-      setChats(chatList);
+      try {
+        const chatList = await Promise.all(matches.map(async (matchId) => {
+          const userDoc = await getDoc(doc(db, 'users', matchId));
+          const otherUserData = userDoc.data() as UserProfile;
+          const id = [profile.uid, matchId].sort().join('_');
+          return { id, otherUser: otherUserData };
+        }));
+        setChats(chatList);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, 'chats_list');
+      }
     };
 
     fetchChats();
@@ -61,9 +65,10 @@ const Chat: React.FC = () => {
     if (otherUserId) {
       getDoc(doc(db, 'users', otherUserId)).then(snap => {
         if (snap.exists()) setOtherUser(snap.data() as UserProfile);
-      });
+      }).catch(err => handleFirestoreError(err, OperationType.GET, `users/${otherUserId}`));
     }
 
+    const path = `chats/${chatId}/messages`;
     const q = query(
       collection(db, 'chats', chatId, 'messages'),
       orderBy('createdAt', 'asc')
@@ -72,6 +77,8 @@ const Chat: React.FC = () => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
       setMessages(msgs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
     });
 
     socketRef.current?.emit('join_chat', chatId);
@@ -97,6 +104,7 @@ const Chat: React.FC = () => {
       createdAt: new Date().toISOString()
     };
 
+    const path = `chats/${chatId}/messages`;
     try {
       // Save to Firestore
       await addDoc(collection(db, 'chats', chatId, 'messages'), messageData);
@@ -106,7 +114,7 @@ const Chat: React.FC = () => {
       
       setNewMessage('');
     } catch (err) {
-      console.error("Error sending message:", err);
+      handleFirestoreError(err, OperationType.CREATE, path);
     }
   };
 

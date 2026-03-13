@@ -1,21 +1,73 @@
-rules_version = '2';
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId}
+// Fields:
+//   - uid: string (required)
+//   - name: string (required)
+//   - email: string (required, PII)
+//   - role: string (required, 'user' or 'admin')
+//   - createdAt: string (required)
+//   - [other optional fields: age, gender, bio, interests, photos, etc.]
+//
+// Collection: posts
+// Document ID: {postId}
+// Fields:
+//   - userId: string (required)
+//   - authorName: string (required)
+//   - authorPhoto: string (optional)
+//   - content: string (required)
+//   - likes: list (required)
+//   - comments: list (required)
+//   - createdAt: string (required)
+//
+// Collection: notifications
+// Document ID: {notificationId}
+// Fields:
+//   - receiverId: string (required)
+//   - senderId: string (required)
+//   - senderName: string (required)
+//   - type: string (required)
+//   - read: bool (required)
+//   - createdAt: string (required)
+//
+// Collection: chats/{chatId}/messages
+// Document ID: {messageId}
+// Fields:
+//   - chatId: string (required)
+//   - senderId: string (required)
+//   - receiverId: string (required)
+//   - text: string (required)
+//   - read: bool (required)
+//   - createdAt: string (required)
+//
+// ===============================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
     // ===============================================================
     // Helper Functions
     // ===============================================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
+
     function isAdmin() {
-      return isAuthenticated() && 
+      return isAuthenticated() &&
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
          (request.auth.token.email == "FRANCISMUGEBE@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
     }
 
     function hasOnlyAllowedFields(fields) {
@@ -23,43 +75,112 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // User Rules
+    // Domain Validators
     // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'name', 'email', 'role', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.role in ['user', 'admin'] &&
+             data.createdAt is string;
+    }
+
+    function isValidPost(data) {
+      return hasRequiredFields(['userId', 'authorName', 'content', 'likes', 'comments', 'createdAt']) &&
+             data.userId is string && data.authorName is string &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
+             data.likes is list && data.comments is list &&
+             data.createdAt is string;
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(['receiverId', 'senderId', 'senderName', 'type', 'read', 'createdAt']) &&
+             data.receiverId is string && data.senderId is string &&
+             data.senderName is string && data.type is string &&
+             data.read is bool && data.createdAt is string;
+    }
+
+    function isValidMessage(data) {
+      return hasRequiredFields(['chatId', 'senderId', 'receiverId', 'text', 'read', 'createdAt']) &&
+             data.chatId is string && data.senderId is string &&
+             data.receiverId is string && data.text is string &&
+             data.text.size() > 0 && data.text.size() < 2000 &&
+             data.read is bool && data.createdAt is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && 
-        hasOnlyAllowedFields(['uid', 'name', 'email', 'age', 'gender', 'location', 'bio', 'interests', 'photos', 'relationshipPreference', 'occupation', 'height', 'lifestyle', 'matches', 'likes', 'dislikes', 'followers', 'following', 'role', 'createdAt']) &&
-        request.resource.data.role == 'user';
-      allow update: if (isOwner(userId) || isAdmin()) &&
-        request.resource.data.role == resource.data.role;
+      // PII Protection: Only owner or admin can read the full profile
+      // Note: This might break discovery if not handled by denormalization or public profiles
+      allow read: if isOwner(userId) || isAdmin();
+      
+      allow create: if isAuthenticated() && 
+                      isValidUser(request.resource.data) && 
+                      isOwner(userId) && 
+                      (request.resource.data.role == 'user' || isAdmin());
+                      
+      allow update: if isAuthenticated() && 
+                      isValidUser(request.resource.data) && 
+                      (isOwner(userId) && request.resource.data.role == resource.data.role || isAdmin());
+      
       allow delete: if isAdmin();
     }
 
-    // ===============================================================
-    // Post Rules
-    // ===============================================================
     match /posts/{postId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      allow create: if isAuthenticated() && 
+                      isValidPost(request.resource.data) && 
+                      isOwner(request.resource.data.userId);
+                      
+      allow update: if isAuthenticated() && 
+                      isValidPost(request.resource.data) && 
+                      (isOwner(resource.data.userId) || isAdmin());
+                      
+      allow delete: if isAuthenticated() && 
+                      (isOwner(resource.data.userId) || isAdmin());
     }
 
-    // ===============================================================
-    // Message Rules
-    // ===============================================================
-    match /chats/{chatId}/messages/{messageId} {
-      allow read: if isAuthenticated() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
-      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
-    }
-
-    // ===============================================================
-    // Notification Rules
-    // ===============================================================
     match /notifications/{notificationId} {
-      allow read: if isOwner(resource.data.receiverId);
-      allow create: if isAuthenticated();
-      allow update: if isOwner(resource.data.receiverId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow read: if isAuthenticated() && isOwner(resource.data.receiverId);
+      
+      allow create: if isAuthenticated() && 
+                      isValidNotification(request.resource.data) && 
+                      isOwner(request.resource.data.senderId);
+                      
+      allow update: if isAuthenticated() && 
+                      isOwner(resource.data.receiverId) && 
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+                      
+      allow delete: if isAuthenticated() && isOwner(resource.data.receiverId);
+    }
+
+    match /chats/{chatId}/messages/{messageId} {
+      function isChatParticipant() {
+        return isAuthenticated() && (request.auth.uid in chatId.split('_'));
+      }
+
+      allow read: if isChatParticipant();
+      
+      allow create: if isChatParticipant() && 
+                      isValidMessage(request.resource.data) && 
+                      isOwner(request.resource.data.senderId);
+                      
+      allow update: if isChatParticipant() && 
+                      isOwner(resource.data.receiverId) && 
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+                      
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
     }
   }
 }

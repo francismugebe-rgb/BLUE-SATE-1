@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, addDoc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,8 +18,6 @@ const Discover: React.FC = () => {
       setLoading(true);
       try {
         const usersRef = collection(db, 'users');
-        // In a real app, we'd filter by distance and preferences
-        // For now, just get all users except current and those already swiped
         const q = query(usersRef, where('uid', '!=', profile.uid));
         const querySnapshot = await getDocs(q);
         
@@ -30,7 +28,7 @@ const Discover: React.FC = () => {
         
         setUsers(filteredUsers);
       } catch (err) {
-        console.error("Error fetching users:", err);
+        handleFirestoreError(err, OperationType.GET, 'users');
       } finally {
         setLoading(false);
       }
@@ -45,33 +43,37 @@ const Discover: React.FC = () => {
     const targetUser = users[currentIndex];
     const userRef = doc(db, 'users', profile.uid);
 
-    if (direction === 'right') {
-      await updateDoc(userRef, {
-        likes: arrayUnion(targetUser.uid)
-      });
-
-      // Check for match
-      if (targetUser.likes?.includes(profile.uid)) {
-        // It's a match!
-        await updateDoc(userRef, { matches: arrayUnion(targetUser.uid) });
-        await updateDoc(doc(db, 'users', targetUser.uid), { matches: arrayUnion(profile.uid) });
-        
-        // Create notification
-        await addDoc(collection(db, 'notifications'), {
-          receiverId: targetUser.uid,
-          senderId: profile.uid,
-          senderName: profile.name,
-          type: 'match',
-          read: false,
-          createdAt: new Date().toISOString()
+    try {
+      if (direction === 'right') {
+        await updateDoc(userRef, {
+          likes: arrayUnion(targetUser.uid)
         });
-        
-        alert(`It's a match with ${targetUser.name}!`);
+
+        // Check for match
+        if (targetUser.likes?.includes(profile.uid)) {
+          // It's a match!
+          await updateDoc(userRef, { matches: arrayUnion(targetUser.uid) });
+          await updateDoc(doc(db, 'users', targetUser.uid), { matches: arrayUnion(profile.uid) });
+          
+          // Create notification
+          await addDoc(collection(db, 'notifications'), {
+            receiverId: targetUser.uid,
+            senderId: profile.uid,
+            senderName: profile.name,
+            type: 'match',
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+          
+          alert(`It's a match with ${targetUser.name}!`);
+        }
+      } else {
+        await updateDoc(userRef, {
+          dislikes: arrayUnion(targetUser.uid)
+        });
       }
-    } else {
-      await updateDoc(userRef, {
-        dislikes: arrayUnion(targetUser.uid)
-      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
     }
 
     setCurrentIndex(prev => prev + 1);

@@ -1,8 +1,8 @@
 {
   "entities": {
-    "users": {
-      "title": "User",
-      "description": "User profile and settings",
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
@@ -26,40 +26,43 @@
         "role": { "type": "string", "enum": ["user", "admin"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "name", "email", "role"]
+      "required": ["uid", "name", "email", "role", "createdAt"]
     },
-    "posts": {
+    "Post": {
       "title": "Post",
-      "description": "Social feed post",
+      "description": "User social feed post",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "userId": { "type": "string" },
         "authorName": { "type": "string" },
         "authorPhoto": { "type": "string" },
         "content": { "type": "string" },
         "image": { "type": "string" },
         "likes": { "type": "array", "items": { "type": "string" } },
-        "comments": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "userId": { "type": "string" },
-              "userName": { "type": "string" },
-              "comment": { "type": "string" },
-              "createdAt": { "type": "string", "format": "date-time" }
-            }
-          }
-        },
+        "comments": { "type": "array", "items": { "$ref": "Comment" } },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "content", "createdAt"]
+      "required": ["userId", "authorName", "content", "createdAt"]
     },
-    "messages": {
-      "title": "Message",
-      "description": "Private message between users",
+    "Comment": {
+      "title": "Comment",
+      "description": "Post comment",
       "type": "object",
       "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "comment", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
         "chatId": { "type": "string" },
         "senderId": { "type": "string" },
         "receiverId": { "type": "string" },
@@ -68,13 +71,14 @@
         "read": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["chatId", "senderId", "receiverId", "text", "createdAt"]
+      "required": ["chatId", "senderId", "receiverId", "text", "read", "createdAt"]
     },
-    "notifications": {
+    "Notification": {
       "title": "Notification",
       "description": "User notification",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "receiverId": { "type": "string" },
         "senderId": { "type": "string" },
         "senderName": { "type": "string" },
@@ -83,13 +87,25 @@
         "read": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["receiverId", "type", "createdAt"]
+      "required": ["receiverId", "senderId", "senderName", "type", "read", "createdAt"]
     }
   },
   "firestore": {
-    "users": { "schema": "users", "description": "User profiles" },
-    "posts": { "schema": "posts", "description": "Social feed posts" },
-    "chats/{chatId}/messages": { "schema": "messages", "description": "Messages within a chat" },
-    "notifications": { "schema": "notifications", "description": "User notifications" }
+    "users": {
+      "schema": "UserProfile",
+      "description": "User profiles"
+    },
+    "posts": {
+      "schema": "Post",
+      "description": "Social feed posts"
+    },
+    "notifications": {
+      "schema": "Notification",
+      "description": "User notifications"
+    },
+    "chats/{chatId}/messages": {
+      "schema": "Message",
+      "description": "Messages within a chat"
+    }
   }
 }
