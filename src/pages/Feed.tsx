@@ -3,9 +3,10 @@ import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUn
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Post } from '../types';
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X, BadgeCheck, Video, Megaphone, Info, DollarSign } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
+import { fileToBase64, validateFile } from '../lib/utils';
 
 const Feed: React.FC = () => {
   const { profile } = useAuth();
@@ -15,6 +16,20 @@ const Feed: React.FC = () => {
   const [postImage, setPostImage] = useState('');
   const [isPosting, setIsPosting] = useState(false);
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
+  const [siteSettings, setSiteSettings] = useState({
+    pointValue: 0.01,
+    announcement: '',
+    adHtml: ''
+  });
+
+  useEffect(() => {
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'site'), (snap) => {
+      if (snap.exists()) {
+        setSiteSettings(snap.data() as any);
+      }
+    });
+    return () => unsubSettings();
+  }, []);
 
   useEffect(() => {
     const postsRef = collection(db, 'posts');
@@ -30,7 +45,14 @@ const Feed: React.FC = () => {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
-      setPosts(postsData);
+      // Sort: Verified users first, then by date
+      const sortedPosts = [...postsData].sort((a, b) => {
+        const aVerified = a.isVerified ? 1 : 0;
+        const bVerified = b.isVerified ? 1 : 0;
+        if (aVerified !== bVerified) return bVerified - aVerified;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      setPosts(sortedPosts);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'posts');
     });
@@ -46,6 +68,7 @@ const Feed: React.FC = () => {
         userId: profile.uid,
         authorName: profile.name,
         authorPhoto: profile.photos?.[0] || '',
+        isVerified: profile.isVerified || false,
         content: newPost,
         image: postImage || null,
         likes: [],
@@ -116,9 +139,39 @@ const Feed: React.FC = () => {
     }
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateFile(file, 'image');
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+
+    try {
+      const base64 = await fileToBase64(file);
+      setPostImage(base64);
+    } catch (err) {
+      alert("Failed to process image");
+    }
+  };
+
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
-      {/* Feed Tabs */}
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-8 max-w-6xl mx-auto">
+      <div className="space-y-8">
+        {/* Announcement */}
+        {siteSettings.announcement && (
+          <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+            <Megaphone className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-blue-900">Announcement</p>
+              <p className="text-sm text-blue-700 leading-relaxed">{siteSettings.announcement}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Feed Tabs */}
       <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl w-fit mx-auto">
         <button 
           onClick={() => setFeedType('global')}
@@ -147,6 +200,12 @@ const Feed: React.FC = () => {
             <textarea
               value={newPost}
               onChange={(e) => setNewPost(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleCreatePost(e as any);
+                }
+              }}
               placeholder="What's on your mind?"
               className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366] transition-all resize-none h-24"
             />
@@ -154,6 +213,7 @@ const Feed: React.FC = () => {
               <div className="relative">
                 <img src={postImage} className="w-full h-40 object-cover rounded-2xl" />
                 <button 
+                  type="button"
                   onClick={() => setPostImage('')}
                   className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-full"
                 >
@@ -162,17 +222,23 @@ const Feed: React.FC = () => {
               </div>
             )}
             <div className="flex justify-between items-center">
-              <button 
-                type="button" 
-                onClick={() => {
-                  const url = prompt("Enter image URL:");
-                  if (url) setPostImage(url);
-                }}
-                className="flex items-center gap-2 text-slate-500 hover:text-[#ff3366] transition-colors font-medium"
-              >
-                <ImageIcon className="w-5 h-5" />
-                <span>Photo</span>
-              </button>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-slate-500 hover:text-[#ff3366] transition-colors font-medium cursor-pointer">
+                  <ImageIcon className="w-5 h-5" />
+                  <span>Photo</span>
+                  <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                </label>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    const url = prompt("Enter image URL:");
+                    if (url) setPostImage(url);
+                  }}
+                  className="text-xs text-slate-400 hover:text-slate-600"
+                >
+                  URL
+                </button>
+              </div>
               <button
                 type="submit"
                 disabled={isPosting || !newPost.trim()}
@@ -195,7 +261,10 @@ const Feed: React.FC = () => {
                   <img src={post.authorPhoto || `https://picsum.photos/seed/${post.userId}/100/100`} className="w-12 h-12 rounded-2xl object-cover" referrerPolicy="no-referrer" />
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-slate-900">{post.authorName}</h4>
+                      <div className="flex items-center gap-1">
+                        <h4 className="font-bold text-slate-900">{post.authorName}</h4>
+                        {post.isVerified && <BadgeCheck className="w-4 h-4 text-blue-500 fill-blue-500" />}
+                      </div>
                       {profile?.uid !== post.userId && (
                         <button 
                           onClick={() => handleFollow(post.userId)}
@@ -278,6 +347,52 @@ const Feed: React.FC = () => {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+    {/* Sidebar */}
+      <div className="hidden lg:block space-y-6">
+        {/* Points Info */}
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-yellow-50 rounded-xl flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-yellow-600" />
+            </div>
+            <h3 className="font-black text-slate-900">Your Earnings</h3>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-slate-500 font-bold">Total Points</span>
+              <span className="text-lg font-black text-slate-900">{profile?.points || 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-slate-500 font-bold">Point Value</span>
+              <span className="text-sm font-black text-emerald-600">${siteSettings.pointValue} / pt</span>
+            </div>
+            <div className="pt-2 border-t border-slate-50 flex justify-between items-center">
+              <span className="text-sm text-slate-900 font-black">Est. Value</span>
+              <span className="text-xl font-black text-[#ff3366]">
+                ${((profile?.points || 0) * siteSettings.pointValue).toFixed(2)}
+              </span>
+            </div>
+          </div>
+          <button className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all">
+            Redeem Points
+          </button>
+        </div>
+
+        {/* Ad Section */}
+        {siteSettings.adHtml && (
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Sponsored</h3>
+              <Info className="w-3 h-3 text-slate-300" />
+            </div>
+            <div 
+              className="ad-container overflow-hidden rounded-xl"
+              dangerouslySetInnerHTML={{ __html: siteSettings.adHtml }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

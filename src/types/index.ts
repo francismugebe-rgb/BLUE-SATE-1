@@ -23,6 +23,7 @@ export interface UserProfile {
   isVerified: boolean;
   points: number;
   level: 'Bronze' | 'Gold' | 'Platinum';
+  savedProducts?: string[];
   createdAt: string;
 }
 
@@ -31,6 +32,7 @@ export interface Post {
   userId: string;
   authorName: string;
   authorPhoto?: string;
+  isVerified: boolean;
   content: string;
   image?: string;
   likes: string[];

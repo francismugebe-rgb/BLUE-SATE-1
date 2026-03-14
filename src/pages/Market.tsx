@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, deleteDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Product } from '../types';
-import { ShoppingBag, Plus, X, Tag, Trash2 } from 'lucide-react';
+import { ShoppingBag, Plus, X, Tag, Trash2, Bookmark, BookmarkCheck, Camera } from 'lucide-react';
 import { PRODUCT_CATEGORIES } from '../constants';
-import { cn } from '../lib/utils';
+import { cn, fileToBase64, validateFile } from '../lib/utils';
 
 const Market: React.FC = () => {
   const { profile, isAdmin } = useAuth();
@@ -54,6 +54,38 @@ const Market: React.FC = () => {
       await deleteDoc(doc(db, 'products', productId));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `products/${productId}`);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateFile(file, 'image');
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+
+    try {
+      const base64 = await fileToBase64(file);
+      setNewProduct({ ...newProduct, image: base64 });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSaveProduct = async (productId: string) => {
+    if (!profile) return;
+    const isSaved = profile.savedProducts?.includes(productId);
+    const userRef = doc(db, 'users', profile.uid);
+
+    try {
+      await updateDoc(userRef, {
+        savedProducts: isSaved ? arrayRemove(productId) : arrayUnion(productId)
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
     }
   };
 
@@ -115,14 +147,37 @@ const Market: React.FC = () => {
             </div>
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">Image URL</label>
-                <input 
-                  type="url" 
-                  value={newProduct.image}
-                  onChange={(e) => setNewProduct({...newProduct, image: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10"
-                  required
-                />
+                <label className="text-sm font-bold text-slate-700">Product Image</label>
+                <div className="flex items-center gap-4">
+                  {newProduct.image ? (
+                    <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-slate-200">
+                      <img src={newProduct.image} className="w-full h-full object-cover" />
+                      <button 
+                        type="button"
+                        onClick={() => setNewProduct({...newProduct, image: ''})}
+                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:border-[#ff3366] hover:text-[#ff3366] transition-all cursor-pointer">
+                      <Camera className="w-6 h-6" />
+                      <span className="text-[10px] font-bold mt-1">Upload</span>
+                      <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                    </label>
+                  )}
+                  <div className="flex-1">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Max 2MB (PNG, JPEG)</p>
+                    <input 
+                      type="url" 
+                      placeholder="Or paste image URL"
+                      value={newProduct.image}
+                      onChange={(e) => setNewProduct({...newProduct, image: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs mt-2 focus:outline-none"
+                    />
+                  </div>
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">Description</label>
@@ -175,9 +230,20 @@ const Market: React.FC = () => {
                   </div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{product.authorName}</span>
                 </div>
-                <button className="text-[#ff3366] font-black text-xs uppercase tracking-widest hover:underline">
-                  Contact Seller
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => handleSaveProduct(product.id)}
+                    className={cn(
+                      "p-2 rounded-lg transition-all",
+                      profile?.savedProducts?.includes(product.id) ? "text-[#ff3366] bg-[#ff3366]/10" : "text-slate-400 hover:bg-slate-100"
+                    )}
+                  >
+                    {profile?.savedProducts?.includes(product.id) ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                  </button>
+                  <button className="text-[#ff3366] font-black text-xs uppercase tracking-widest hover:underline">
+                    Contact Seller
+                  </button>
+                </div>
               </div>
             </div>
           </div>

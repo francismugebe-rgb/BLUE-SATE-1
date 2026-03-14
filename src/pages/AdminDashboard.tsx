@@ -1,15 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Post } from '../types';
-import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck, BadgeCheck, Star, Trophy, Edit3, Heart, MessageCircle } from 'lucide-react';
+import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck, BadgeCheck, Star, Trophy, Edit3, Heart, MessageCircle, Settings, Megaphone, Code } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
+import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc, onSnapshot, setDoc } from 'firebase/firestore';
 
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'users' | 'posts' | 'settings'>('users');
+  const [siteSettings, setSiteSettings] = useState({
+    pointValue: 0.01,
+    announcement: '',
+    adHtml: ''
+  });
+
+  useEffect(() => {
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'site'), (snap) => {
+      if (snap.exists()) {
+        setSiteSettings(snap.data() as any);
+      }
+    });
+    return () => unsubSettings();
+  }, []);
+
+  const handleSaveSettings = async () => {
+    try {
+      await setDoc(doc(db, 'settings', 'site'), siteSettings);
+      alert('Settings saved successfully!');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/site');
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -82,13 +106,41 @@ const AdminDashboard: React.FC = () => {
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-10">
-        {/* User Management */}
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-8 border-b border-slate-50 flex justify-between items-center">
-            <h3 className="text-xl font-bold text-slate-900">User Management</h3>
-            <button className="text-[#ff3366] font-bold text-sm">View All</button>
-          </div>
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+        <div className="flex gap-4 border-b border-slate-100">
+          <button 
+            onClick={() => setActiveTab('users')}
+            className={cn(
+              "px-6 py-4 font-bold text-sm transition-all relative",
+              activeTab === 'users' ? "text-[#ff3366]" : "text-slate-400 hover:text-slate-600"
+            )}
+          >
+            User Management
+            {activeTab === 'users' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#ff3366]" />}
+          </button>
+          <button 
+            onClick={() => setActiveTab('posts')}
+            className={cn(
+              "px-6 py-4 font-bold text-sm transition-all relative",
+              activeTab === 'posts' ? "text-[#ff3366]" : "text-slate-400 hover:text-slate-600"
+            )}
+          >
+            Post Moderation
+            {activeTab === 'posts' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#ff3366]" />}
+          </button>
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={cn(
+              "px-6 py-4 font-bold text-sm transition-all relative",
+              activeTab === 'settings' ? "text-[#ff3366]" : "text-slate-400 hover:text-slate-600"
+            )}
+          >
+            Site Settings
+            {activeTab === 'settings' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#ff3366]" />}
+          </button>
+        </div>
+
+        {activeTab === 'users' && (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
@@ -162,14 +214,9 @@ const AdminDashboard: React.FC = () => {
               </tbody>
             </table>
           </div>
-        </div>
+        )}
 
-        {/* Recent Posts */}
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-8 border-b border-slate-50 flex justify-between items-center">
-            <h3 className="text-xl font-bold text-slate-900">Recent Content</h3>
-            <button className="text-[#ff3366] font-bold text-sm">View All</button>
-          </div>
+        {activeTab === 'posts' && (
           <div className="p-8 space-y-6">
             {posts.map(post => (
               <div key={post.id} className="flex gap-4 p-4 rounded-2xl hover:bg-slate-50 transition-all group">
@@ -193,7 +240,89 @@ const AdminDashboard: React.FC = () => {
               </div>
             ))}
           </div>
-        </div>
+        )}
+        {activeTab === 'settings' && (
+          <div className="p-8 space-y-8">
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <Settings className="w-6 h-6 text-[#ff3366]" />
+                  <h3 className="text-xl font-black text-slate-900">General Settings</h3>
+                </div>
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Point Value (e.g. 0.01 = $0.01 per point)</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">$</span>
+                      <input 
+                        type="number" 
+                        step="0.001"
+                        value={siteSettings.pointValue}
+                        onChange={(e) => setSiteSettings({...siteSettings, pointValue: parseFloat(e.target.value)})}
+                        className="w-full bg-white border border-slate-200 rounded-xl p-4 pl-8 focus:outline-none font-bold"
+                      />
+                    </div>
+                  </div>
+                  <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                    <p className="text-xs text-blue-700 font-bold leading-relaxed">
+                      Current Value: 100 Points = ${(siteSettings.pointValue * 100).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <Megaphone className="w-6 h-6 text-[#ff3366]" />
+                  <h3 className="text-xl font-black text-slate-900">Announcements</h3>
+                </div>
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Site-wide Announcement</label>
+                    <textarea 
+                      value={siteSettings.announcement}
+                      onChange={(e) => setSiteSettings({...siteSettings, announcement: e.target.value})}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-4 focus:outline-none h-32 resize-none font-medium"
+                      placeholder="Enter announcement text..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Code className="w-6 h-6 text-[#ff3366]" />
+                <h3 className="text-xl font-black text-slate-900">Advertising System</h3>
+              </div>
+              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">Ad HTML Code (e.g. Google AdSense, Custom Banners)</label>
+                  <textarea 
+                    value={siteSettings.adHtml}
+                    onChange={(e) => setSiteSettings({...siteSettings, adHtml: e.target.value})}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-4 focus:outline-none h-48 resize-none font-mono text-xs"
+                    placeholder="Paste HTML/JS code here..."
+                  />
+                </div>
+                <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                  <p className="text-xs text-amber-700 font-bold leading-relaxed">
+                    Warning: Be careful when pasting HTML/JS code. Only use trusted sources.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button 
+                onClick={handleSaveSettings}
+                className="bg-[#ff3366] text-white px-12 py-4 rounded-2xl font-black shadow-xl shadow-[#ff3366]/20 hover:scale-105 transition-all text-lg"
+              >
+                Save All Settings
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
