@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Post } from '../types';
-import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck } from 'lucide-react';
+import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck, BadgeCheck, Star, Trophy, Edit3, Heart, MessageCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { Link } from 'react-router-dom';
 
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -93,7 +94,8 @@ const AdminDashboard: React.FC = () => {
               <thead>
                 <tr className="bg-slate-50/50 text-slate-400 text-xs font-bold uppercase tracking-widest">
                   <th className="px-8 py-4">User</th>
-                  <th className="px-8 py-4">Status</th>
+                  <th className="px-8 py-4">Level</th>
+                  <th className="px-8 py-4">Verification</th>
                   <th className="px-8 py-4">Actions</th>
                 </tr>
               </thead>
@@ -104,16 +106,44 @@ const AdminDashboard: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <img src={user.photos?.[0] || `https://picsum.photos/seed/${user.uid}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
                         <div>
-                          <p className="font-bold text-slate-900">{user.name}</p>
+                          <div className="flex items-center gap-1">
+                            <p className="font-bold text-slate-900">{user.name}</p>
+                            {user.isVerified && <BadgeCheck className="w-3 h-3 text-blue-500 fill-blue-500" />}
+                          </div>
                           <p className="text-xs text-slate-400">{user.email}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-8 py-4">
-                      <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase tracking-wider">Active</span>
+                      <div className="flex items-center gap-2">
+                        {user.level === 'Platinum' && <Trophy className="w-4 h-4 text-slate-400" />}
+                        {user.level === 'Gold' && <Star className="w-4 h-4 text-yellow-500" />}
+                        {user.level === 'Bronze' && <Star className="w-4 h-4 text-orange-400" />}
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-wider",
+                          user.level === 'Platinum' ? "text-slate-400" :
+                          user.level === 'Gold' ? "text-yellow-600" :
+                          "text-orange-600"
+                        )}>{user.level || 'Bronze'}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-4">
+                      <span className={cn(
+                        "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                        user.isVerified ? "bg-blue-50 text-blue-600" : "bg-slate-50 text-slate-400"
+                      )}>
+                        {user.isVerified ? 'Verified' : 'Pending'}
+                      </span>
                     </td>
                     <td className="px-8 py-4">
                       <div className="flex gap-2">
+                        <Link 
+                          to={`/profile/${user.uid}`}
+                          className="p-2 text-slate-400 hover:text-[#ff3366] transition-colors"
+                          title="Edit Profile"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </Link>
                         {user.role !== 'admin' && (
                           <button 
                             onClick={() => handlePromote(user.uid)}
@@ -146,7 +176,13 @@ const AdminDashboard: React.FC = () => {
                 <img src={post.authorPhoto || `https://picsum.photos/seed/${post.userId}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-slate-700 line-clamp-2 leading-relaxed">{post.content}</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">by {post.authorName}</p>
+                  <div className="flex items-center gap-4 mt-1">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">by {post.authorName}</p>
+                    <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> {post.likes.length}</span>
+                      <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {post.comments.length}</span>
+                    </div>
+                  </div>
                 </div>
                 <button 
                   onClick={() => handleDeletePost(post.id)}

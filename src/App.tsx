@@ -12,6 +12,8 @@ import Chat from './pages/Chat';
 import Matches from './pages/Matches';
 import AdminDashboard from './pages/AdminDashboard';
 import Settings from './pages/Settings';
+import Reels from './pages/Reels';
+import Market from './pages/Market';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -44,6 +46,8 @@ function App() {
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:id" element={<Chat />} />
             <Route path="/matches" element={<Matches />} />
+            <Route path="/reels" element={<Reels />} />
+            <Route path="/market" element={<Market />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
 

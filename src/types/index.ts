@@ -8,7 +8,9 @@ export interface UserProfile {
   bio?: string;
   interests?: string[];
   photos?: string[];
+  coverPhoto?: string;
   relationshipPreference?: string;
+  relationshipStatus?: string;
   occupation?: string;
   height?: number;
   lifestyle?: string[];
@@ -18,6 +20,9 @@ export interface UserProfile {
   followers?: string[];
   following?: string[];
   role: 'user' | 'admin';
+  isVerified: boolean;
+  points: number;
+  level: 'Bronze' | 'Gold' | 'Platinum';
   createdAt: string;
 }
 
@@ -30,6 +35,7 @@ export interface Post {
   image?: string;
   likes: string[];
   comments: Comment[];
+  views: number;
   createdAt: string;
 }
 
@@ -56,8 +62,33 @@ export interface Notification {
   receiverId: string;
   senderId: string;
   senderName: string;
-  type: 'match' | 'message' | 'like' | 'comment' | 'follow';
+  type: 'match' | 'message' | 'like' | 'comment' | 'follow' | 'verification';
   relatedId?: string;
   read: boolean;
+  createdAt: string;
+}
+
+export interface Reel {
+  id: string;
+  userId: string;
+  authorName: string;
+  authorPhoto?: string;
+  videoUrl: string;
+  caption: string;
+  likes: string[];
+  comments: Comment[];
+  views: number;
+  createdAt: string;
+}
+
+export interface Product {
+  id: string;
+  userId: string;
+  authorName: string;
+  title: string;
+  description: string;
+  price: number;
+  image: string;
+  category: string;
   createdAt: string;
 }

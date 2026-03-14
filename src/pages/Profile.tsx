@@ -4,18 +4,20 @@ import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection } from 'firebase
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile } from '../types';
-import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus } from 'lucide-react';
+import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon } from 'lucide-react';
+import { INTERESTS_LIST, RELATIONSHIP_STATUS_LIST } from '../constants';
 import { cn } from '../lib/utils';
 
 const Profile: React.FC = () => {
   const { id } = useParams();
-  const { profile, user: authUser } = useAuth();
+  const { profile, user: authUser, isAdmin } = useAuth();
   const [targetProfile, setTargetProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editedData, setEditedData] = useState<Partial<UserProfile>>({});
 
   const isOwnProfile = !id || id === authUser?.uid;
+  const canEdit = isOwnProfile || isAdmin;
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -33,12 +35,17 @@ const Profile: React.FC = () => {
   }, [id, profile, isOwnProfile]);
 
   const handleSave = async () => {
-    if (!authUser) return;
+    if (!authUser || !targetProfile) return;
     try {
-      await updateDoc(doc(db, 'users', authUser.uid), editedData);
+      await updateDoc(doc(db, 'users', targetProfile.uid), editedData);
       setIsEditing(false);
+      if (!isOwnProfile) {
+        // If admin edited, refresh target profile
+        const snap = await getDoc(doc(db, 'users', targetProfile.uid));
+        if (snap.exists()) setTargetProfile(snap.data() as UserProfile);
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${authUser.uid}`);
+      handleFirestoreError(err, OperationType.UPDATE, `users/${targetProfile.uid}`);
     }
   };
 
@@ -80,18 +87,34 @@ const Profile: React.FC = () => {
     }
   };
 
-  const handlePhotoChange = async () => {
-    if (!isOwnProfile || !authUser) return;
-    const newPhoto = prompt("Enter new photo URL:");
+  const handlePhotoChange = async (type: 'profile' | 'cover') => {
+    if (!canEdit || !targetProfile) return;
+    const newPhoto = prompt(`Enter new ${type} photo URL:`);
     if (newPhoto) {
       try {
-        await updateDoc(doc(db, 'users', authUser.uid), {
-          photos: [newPhoto, ...(profile?.photos?.slice(1) || [])]
-        });
+        const updateObj = type === 'profile' 
+          ? { photos: [newPhoto, ...(targetProfile.photos?.slice(1) || [])] }
+          : { coverPhoto: newPhoto };
+        
+        await updateDoc(doc(db, 'users', targetProfile.uid), updateObj);
+        
+        if (isOwnProfile) {
+          // Profile will update via onSnapshot in AuthContext
+        } else {
+          setTargetProfile({ ...targetProfile, ...updateObj });
+        }
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${authUser.uid}`);
+        handleFirestoreError(err, OperationType.UPDATE, `users/${targetProfile.uid}`);
       }
     }
+  };
+
+  const toggleInterest = (interest: string) => {
+    const currentInterests = editedData.interests || targetProfile?.interests || [];
+    const newInterests = currentInterests.includes(interest)
+      ? currentInterests.filter(i => i !== interest)
+      : [...currentInterests, interest];
+    setEditedData({ ...editedData, interests: newInterests });
   };
 
   if (loading) return <div className="flex items-center justify-center h-full">Loading profile...</div>;
@@ -102,41 +125,70 @@ const Profile: React.FC = () => {
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
         {/* Header / Photos */}
         <div className="relative h-96 bg-slate-100">
-          <img 
-            src={targetProfile.photos?.[0] || `https://picsum.photos/seed/${targetProfile.uid}/800/600`} 
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-          {isOwnProfile && (
+          {/* Cover Photo */}
+          <div className="absolute inset-0">
+            <img 
+              src={targetProfile.coverPhoto || `https://picsum.photos/seed/${targetProfile.uid}-cover/1200/400`} 
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+          </div>
+
+          {canEdit && (
             <button 
-              onClick={handlePhotoChange}
-              className="absolute bottom-6 right-6 bg-white/80 backdrop-blur-md p-4 rounded-2xl shadow-lg text-slate-700 hover:bg-white transition-all flex items-center gap-2 font-bold"
+              onClick={() => handlePhotoChange('cover')}
+              className="absolute top-6 right-6 bg-white/20 backdrop-blur-md p-3 rounded-xl text-white hover:bg-white/40 transition-all flex items-center gap-2 font-bold border border-white/30"
             >
-              <Camera className="w-5 h-5" />
-              <span>Change Photo</span>
+              <ImageIcon className="w-4 h-4" />
+              <span className="text-sm">Change Cover</span>
             </button>
           )}
+
+          {/* Profile Photo */}
+          <div className="absolute -bottom-16 left-12 flex items-end gap-6">
+            <div className="relative group">
+              <img 
+                src={targetProfile.photos?.[0] || `https://picsum.photos/seed/${targetProfile.uid}/400/400`} 
+                className="w-40 h-40 rounded-[2.5rem] object-cover border-8 border-white shadow-2xl"
+                referrerPolicy="no-referrer"
+              />
+              {canEdit && (
+                <button 
+                  onClick={() => handlePhotoChange('profile')}
+                  className="absolute inset-0 bg-black/40 rounded-[2.5rem] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                >
+                  <Camera className="w-8 h-8" />
+                </button>
+              )}
+            </div>
+            
+            <div className="mb-4 pb-2">
+              <div className="flex items-center gap-3">
+                <h1 className="text-4xl font-black text-white drop-shadow-md">{targetProfile.name}, {targetProfile.age || 25}</h1>
+                {targetProfile.isVerified && (
+                  <BadgeCheck className="w-8 h-8 text-[#00a2ff] fill-white drop-shadow-md" />
+                )}
+              </div>
+              <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-white/20 backdrop-blur-md rounded-lg text-white text-xs font-bold border border-white/20">
+                  <Trophy className="w-3 h-3 text-yellow-400" />
+                  <span>{targetProfile.level}</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-white/20 backdrop-blur-md rounded-lg text-white text-xs font-bold border border-white/20">
+                  <Star className="w-3 h-3 text-yellow-400" />
+                  <span>{targetProfile.points} Points</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="p-8 md:p-12 relative">
+        <div className="p-8 md:p-12 pt-24 relative">
           {/* Profile Info */}
           <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-12">
             <div className="space-y-2">
-              <div className="flex items-center gap-4">
-                <h1 className="text-4xl font-extrabold text-slate-900">{targetProfile.name}, {targetProfile.age || 25}</h1>
-                {isOwnProfile && (
-                  <button 
-                    onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-                    className={cn(
-                      "p-3 rounded-xl transition-all",
-                      isEditing ? "bg-emerald-500 text-white" : "bg-slate-50 text-slate-400 hover:text-[#ff3366]"
-                    )}
-                  >
-                    {isEditing ? <Check className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />}
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-4 text-slate-500 font-medium">
+              <div className="flex items-center gap-4 text-slate-500 font-bold">
                 <div className="flex items-center gap-1.5">
                   <MapPin className="w-4 h-4" />
                   <span>{targetProfile.location || 'Not specified'}</span>
@@ -148,35 +200,60 @@ const Profile: React.FC = () => {
               </div>
             </div>
             
-            {!isOwnProfile && (
-              <div className="flex gap-3">
+            <div className="flex gap-3">
+              {canEdit && (
                 <button 
-                  onClick={handleFollow}
+                  onClick={() => isEditing ? handleSave() : setIsEditing(true)}
                   className={cn(
-                    "px-8 py-4 rounded-2xl font-bold transition-all flex items-center gap-2",
-                    profile?.following?.includes(targetProfile.uid) 
-                      ? "bg-slate-100 text-slate-600 hover:bg-slate-200" 
-                      : "bg-slate-900 text-white hover:bg-slate-800"
+                    "px-6 py-4 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg",
+                    isEditing ? "bg-emerald-500 text-white shadow-emerald-500/20" : "bg-slate-900 text-white shadow-slate-900/20 hover:bg-slate-800"
                   )}
                 >
-                  {profile?.following?.includes(targetProfile.uid) ? (
+                  {isEditing ? (
                     <>
-                      <UserMinus className="w-5 h-5" />
-                      <span>Unfollow</span>
+                      <Check className="w-5 h-5" />
+                      <span>Save Changes</span>
                     </>
                   ) : (
                     <>
-                      <UserPlus className="w-5 h-5" />
-                      <span>Follow</span>
+                      {isAdmin && !isOwnProfile && <ShieldCheck className="w-5 h-5 text-yellow-400" />}
+                      <Edit3 className="w-5 h-5" />
+                      <span>{isAdmin && !isOwnProfile ? 'Admin Edit' : 'Edit Profile'}</span>
                     </>
                   )}
                 </button>
-                <button className="bg-[#ff3366] text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-[#ff3366]/20 hover:bg-[#e62e5c] transition-all flex items-center gap-2">
-                  <Heart className="w-5 h-5 fill-current" />
-                  <span>Like</span>
-                </button>
-              </div>
-            )}
+              )}
+              
+              {!isOwnProfile && (
+                <>
+                  <button 
+                    onClick={handleFollow}
+                    className={cn(
+                      "px-8 py-4 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg",
+                      profile?.following?.includes(targetProfile.uid) 
+                        ? "bg-slate-100 text-slate-600 hover:bg-slate-200" 
+                        : "bg-slate-900 text-white hover:bg-slate-800 shadow-slate-900/20"
+                    )}
+                  >
+                    {profile?.following?.includes(targetProfile.uid) ? (
+                      <>
+                        <UserMinus className="w-5 h-5" />
+                        <span>Unfollow</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-5 h-5" />
+                        <span>Follow</span>
+                      </>
+                    )}
+                  </button>
+                  <button className="bg-[#ff3366] text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-[#ff3366]/20 hover:bg-[#e62e5c] transition-all flex items-center gap-2">
+                    <Heart className="w-5 h-5 fill-current" />
+                    <span>Like</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="grid md:grid-cols-[2fr_1fr] gap-12">
@@ -245,15 +322,27 @@ const Profile: React.FC = () => {
               <section>
                 <h3 className="text-xl font-bold text-slate-900 mb-4">Interests</h3>
                 <div className="flex flex-wrap gap-3">
-                  {(targetProfile.interests || ['Travel', 'Music', 'Cooking', 'Art']).map(interest => (
-                    <span key={interest} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold text-sm border border-slate-100">
-                      {interest}
-                    </span>
-                  ))}
-                  {isOwnProfile && (
-                    <button className="px-4 py-2 bg-[#ff3366]/5 text-[#ff3366] rounded-xl font-bold text-sm border border-[#ff3366]/10 hover:bg-[#ff3366]/10 transition-all">
-                      + Add More
-                    </button>
+                  {isEditing ? (
+                    INTERESTS_LIST.map(interest => (
+                      <button
+                        key={interest}
+                        onClick={() => toggleInterest(interest)}
+                        className={cn(
+                          "px-4 py-2 rounded-xl font-bold text-sm border transition-all",
+                          (editedData.interests || targetProfile.interests || []).includes(interest)
+                            ? "bg-[#ff3366] text-white border-[#ff3366]"
+                            : "bg-slate-50 text-slate-600 border-slate-100 hover:border-[#ff3366]/30"
+                        )}
+                      >
+                        {interest}
+                      </button>
+                    ))
+                  ) : (
+                    (targetProfile.interests || ['Travel', 'Music', 'Cooking', 'Art']).map(interest => (
+                      <span key={interest} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold text-sm border border-slate-100">
+                        {interest}
+                      </span>
+                    ))
                   )}
                 </div>
               </section>
@@ -304,6 +393,26 @@ const Profile: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
                       <Heart className="w-4 h-4" />
+                      <span>Status</span>
+                    </div>
+                    {isEditing ? (
+                      <select
+                        value={editedData.relationshipStatus || ''}
+                        onChange={(e) => setEditedData({...editedData, relationshipStatus: e.target.value})}
+                        className="bg-white border border-slate-200 rounded-lg p-1 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10"
+                      >
+                        <option value="">Select</option>
+                        {RELATIONSHIP_STATUS_LIST.map(status => (
+                          <option key={status} value={status}>{status}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="font-bold text-slate-900 text-right">{targetProfile.relationshipStatus || 'Not set'}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+                      <Heart className="w-4 h-4" />
                       <span>Preference</span>
                     </div>
                     {isEditing ? (
@@ -319,6 +428,47 @@ const Profile: React.FC = () => {
                       </select>
                     ) : (
                       <span className="font-bold text-slate-900 text-right">{targetProfile.relationshipPreference || 'Not set'}</span>
+                    )}
+                    {isAdmin && (
+                      <div className="pt-4 border-t border-slate-200 mt-4 space-y-4">
+                        <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest">Admin Controls</h5>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-slate-700">Verified Account</span>
+                          <button 
+                            onClick={() => setEditedData({ ...editedData, isVerified: !editedData.isVerified })}
+                            className={cn(
+                              "w-12 h-6 rounded-full transition-all relative",
+                              (editedData.isVerified ?? targetProfile.isVerified) ? "bg-blue-500" : "bg-slate-300"
+                            )}
+                          >
+                            <div className={cn(
+                              "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                              (editedData.isVerified ?? targetProfile.isVerified) ? "left-7" : "left-1"
+                            )} />
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-700">User Level</label>
+                          <select
+                            value={editedData.level || targetProfile.level}
+                            onChange={(e) => setEditedData({...editedData, level: e.target.value as any})}
+                            className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold"
+                          >
+                            <option value="Bronze">Bronze</option>
+                            <option value="Gold">Gold</option>
+                            <option value="Platinum">Platinum</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-700">Points</label>
+                          <input
+                            type="number"
+                            value={editedData.points ?? targetProfile.points}
+                            onChange={(e) => setEditedData({...editedData, points: parseInt(e.target.value)})}
+                            className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold"
+                          />
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>

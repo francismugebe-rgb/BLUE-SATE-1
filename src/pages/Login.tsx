@@ -5,12 +5,34 @@ import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Heart, Mail, Lock, AlertCircle } from 'lucide-react';
 
+import { useAuth } from '../context/AuthContext';
+
 const Login: React.FC = () => {
+  const { resetPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      setError('Please enter your email address first.');
+      return;
+    }
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      await resetPassword(email);
+      setSuccess('Password reset email sent! Check your inbox.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset email');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +105,13 @@ const Login: React.FC = () => {
           </div>
         )}
 
+        {success && (
+          <div className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl mb-6 flex items-center gap-3 border border-emerald-100">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <p className="text-sm font-medium">{success}</p>
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700 ml-1">Email Address</label>
@@ -115,7 +144,13 @@ const Login: React.FC = () => {
           </div>
 
           <div className="flex justify-end">
-            <button type="button" className="text-sm font-bold text-[#ff3366] hover:underline">Forgot Password?</button>
+            <button 
+              type="button" 
+              onClick={handleResetPassword}
+              className="text-sm font-bold text-[#ff3366] hover:underline"
+            >
+              Forgot Password?
+            </button>
           </div>
 
           <button
