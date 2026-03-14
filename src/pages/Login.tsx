@@ -41,12 +41,12 @@ const Login: React.FC = () => {
       // Check if user profile exists
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (!userDoc.exists()) {
-        const adminEmail = (import.meta as any).env.VITE_ADMIN_EMAIL || 'FRANCISMUGEBE@gmail.com';
+        const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || 'francismugebe@gmail.com').toLowerCase();
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,
           name: user.displayName || 'Anonymous',
           email: user.email || '',
-          role: user.email === adminEmail ? 'admin' : 'user',
+          role: user.email?.toLowerCase() === adminEmail ? 'admin' : 'user',
           createdAt: new Date().toISOString(),
           interests: [],
           photos: [user.photoURL || `https://picsum.photos/seed/${user.uid}/400/400`],

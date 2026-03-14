@@ -53,8 +53,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribeAuth();
   }, []);
 
-  const adminEmail = (import.meta as any).env.VITE_ADMIN_EMAIL || 'FRANCISMUGEBE@gmail.com';
-  const isAdmin = profile?.role === 'admin' || user?.email === adminEmail;
+  const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || 'francismugebe@gmail.com').toLowerCase();
+  const isAdmin = profile?.role === 'admin' || user?.email?.toLowerCase() === adminEmail;
 
   return (
     <AuthContext.Provider value={{ user, profile, loading, isAdmin }}>
