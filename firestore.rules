@@ -140,8 +140,12 @@ service cloud.firestore {
                       isOwner(request.resource.data.userId);
                       
       allow update: if isAuthenticated() && 
-                      isValidPost(request.resource.data) && 
-                      (isOwner(resource.data.userId) || isAdmin());
+                      (
+                        // Allow anyone to like/comment if they don't change other fields
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'comments']) ||
+                        isOwner(resource.data.userId) || 
+                        isAdmin()
+                      );
                       
       allow delete: if isAuthenticated() && 
                       (isOwner(resource.data.userId) || isAdmin());
@@ -151,8 +155,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() && isOwner(resource.data.receiverId);
       
       allow create: if isAuthenticated() && 
-                      isValidNotification(request.resource.data) && 
-                      isOwner(request.resource.data.senderId);
+                      isValidNotification(request.resource.data);
                       
       allow update: if isAuthenticated() && 
                       isOwner(resource.data.receiverId) && 

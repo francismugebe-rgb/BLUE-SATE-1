@@ -18,13 +18,33 @@ const Discover: React.FC = () => {
       setLoading(true);
       try {
         const usersRef = collection(db, 'users');
+        // Simple query: not me
         const q = query(usersRef, where('uid', '!=', profile.uid));
         const querySnapshot = await getDocs(q);
         
         const swipedIds = [...(profile.likes || []), ...(profile.dislikes || [])];
         const filteredUsers = querySnapshot.docs
           .map(doc => doc.data() as UserProfile)
-          .filter(u => !swipedIds.includes(u.uid));
+          .filter(u => {
+            // Filter out already swiped
+            if (swipedIds.includes(u.uid)) return false;
+            
+            // Filter by gender preference if set
+            if (profile.relationshipPreference && u.gender) {
+              const pref = profile.relationshipPreference.toLowerCase();
+              const userGender = u.gender.toLowerCase();
+              if (pref === 'men' && userGender !== 'male') return false;
+              if (pref === 'women' && userGender !== 'female') return false;
+            }
+
+            // Filter by location if set (simple match)
+            // Only filter if both have location set
+            if (profile.location && u.location) {
+              if (profile.location.toLowerCase() !== u.location.toLowerCase()) return false;
+            }
+            
+            return true;
+          });
         
         setUsers(filteredUsers);
       } catch (err) {

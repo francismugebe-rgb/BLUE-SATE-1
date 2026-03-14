@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile } from '../types';
-import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check } from 'lucide-react';
+import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const Profile: React.FC = () => {
@@ -38,7 +38,59 @@ const Profile: React.FC = () => {
       await updateDoc(doc(db, 'users', authUser.uid), editedData);
       setIsEditing(false);
     } catch (err) {
-      console.error("Error updating profile:", err);
+      handleFirestoreError(err, OperationType.UPDATE, `users/${authUser.uid}`);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!profile || !targetProfile || isOwnProfile) return;
+    
+    const isFollowing = profile.following?.includes(targetProfile.uid);
+    const myRef = doc(db, 'users', profile.uid);
+    const theirRef = doc(db, 'users', targetProfile.uid);
+
+    try {
+      if (isFollowing) {
+        await updateDoc(myRef, {
+          following: profile.following?.filter(id => id !== targetProfile.uid)
+        });
+        await updateDoc(theirRef, {
+          followers: targetProfile.followers?.filter(id => id !== profile.uid)
+        });
+      } else {
+        await updateDoc(myRef, {
+          following: arrayUnion(targetProfile.uid)
+        });
+        await updateDoc(theirRef, {
+          followers: arrayUnion(profile.uid)
+        });
+
+        // Notify them
+        await addDoc(collection(db, 'notifications'), {
+          receiverId: targetProfile.uid,
+          senderId: profile.uid,
+          senderName: profile.name,
+          type: 'follow',
+          read: false,
+          createdAt: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'users');
+    }
+  };
+
+  const handlePhotoChange = async () => {
+    if (!isOwnProfile || !authUser) return;
+    const newPhoto = prompt("Enter new photo URL:");
+    if (newPhoto) {
+      try {
+        await updateDoc(doc(db, 'users', authUser.uid), {
+          photos: [newPhoto, ...(profile?.photos?.slice(1) || [])]
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${authUser.uid}`);
+      }
     }
   };
 
@@ -56,7 +108,10 @@ const Profile: React.FC = () => {
             referrerPolicy="no-referrer"
           />
           {isOwnProfile && (
-            <button className="absolute bottom-6 right-6 bg-white/80 backdrop-blur-md p-4 rounded-2xl shadow-lg text-slate-700 hover:bg-white transition-all flex items-center gap-2 font-bold">
+            <button 
+              onClick={handlePhotoChange}
+              className="absolute bottom-6 right-6 bg-white/80 backdrop-blur-md p-4 rounded-2xl shadow-lg text-slate-700 hover:bg-white transition-all flex items-center gap-2 font-bold"
+            >
               <Camera className="w-5 h-5" />
               <span>Change Photo</span>
             </button>
@@ -94,10 +149,33 @@ const Profile: React.FC = () => {
             </div>
             
             {!isOwnProfile && (
-              <button className="bg-[#ff3366] text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-[#ff3366]/20 hover:bg-[#e62e5c] transition-all flex items-center gap-2">
-                <Heart className="w-5 h-5 fill-current" />
-                <span>Like Profile</span>
-              </button>
+              <div className="flex gap-3">
+                <button 
+                  onClick={handleFollow}
+                  className={cn(
+                    "px-8 py-4 rounded-2xl font-bold transition-all flex items-center gap-2",
+                    profile?.following?.includes(targetProfile.uid) 
+                      ? "bg-slate-100 text-slate-600 hover:bg-slate-200" 
+                      : "bg-slate-900 text-white hover:bg-slate-800"
+                  )}
+                >
+                  {profile?.following?.includes(targetProfile.uid) ? (
+                    <>
+                      <UserMinus className="w-5 h-5" />
+                      <span>Unfollow</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-5 h-5" />
+                      <span>Follow</span>
+                    </>
+                  )}
+                </button>
+                <button className="bg-[#ff3366] text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-[#ff3366]/20 hover:bg-[#e62e5c] transition-all flex items-center gap-2">
+                  <Heart className="w-5 h-5 fill-current" />
+                  <span>Like</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -107,11 +185,55 @@ const Profile: React.FC = () => {
               <section>
                 <h3 className="text-xl font-bold text-slate-900 mb-4">About Me</h3>
                 {isEditing ? (
-                  <textarea
-                    value={editedData.bio || ''}
-                    onChange={(e) => setEditedData({...editedData, bio: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366] h-32 resize-none"
-                  />
+                  <div className="space-y-4">
+                    <textarea
+                      value={editedData.bio || ''}
+                      onChange={(e) => setEditedData({...editedData, bio: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366] h-32 resize-none"
+                      placeholder="Tell people about yourself..."
+                    />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">Name</label>
+                        <input
+                          type="text"
+                          value={editedData.name || ''}
+                          onChange={(e) => setEditedData({...editedData, name: e.target.value})}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">Age</label>
+                        <input
+                          type="number"
+                          value={editedData.age || ''}
+                          onChange={(e) => setEditedData({...editedData, age: parseInt(e.target.value)})}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366]"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">Location</label>
+                        <input
+                          type="text"
+                          value={editedData.location || ''}
+                          onChange={(e) => setEditedData({...editedData, location: e.target.value})}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366]"
+                          placeholder="City, Country"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">Occupation</label>
+                        <input
+                          type="text"
+                          value={editedData.occupation || ''}
+                          onChange={(e) => setEditedData({...editedData, occupation: e.target.value})}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366]"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 ) : (
                   <p className="text-slate-600 leading-relaxed text-lg">
                     {targetProfile.bio || "No bio added yet. Tell people about yourself!"}
@@ -147,21 +269,57 @@ const Profile: React.FC = () => {
                       <User className="w-4 h-4" />
                       <span>Gender</span>
                     </div>
-                    <span className="font-bold text-slate-900">{targetProfile.gender || 'Not set'}</span>
+                    {isEditing ? (
+                      <select
+                        value={editedData.gender || ''}
+                        onChange={(e) => setEditedData({...editedData, gender: e.target.value})}
+                        className="bg-white border border-slate-200 rounded-lg p-1 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10"
+                      >
+                        <option value="">Select</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    ) : (
+                      <span className="font-bold text-slate-900">{targetProfile.gender || 'Not set'}</span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
                       <Ruler className="w-4 h-4" />
                       <span>Height</span>
                     </div>
-                    <span className="font-bold text-slate-900">{targetProfile.height ? `${targetProfile.height}cm` : 'Not set'}</span>
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        value={editedData.height || ''}
+                        onChange={(e) => setEditedData({...editedData, height: parseInt(e.target.value)})}
+                        className="w-20 bg-white border border-slate-200 rounded-lg p-1 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10"
+                        placeholder="cm"
+                      />
+                    ) : (
+                      <span className="font-bold text-slate-900">{targetProfile.height ? `${targetProfile.height}cm` : 'Not set'}</span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
                       <Heart className="w-4 h-4" />
                       <span>Preference</span>
                     </div>
-                    <span className="font-bold text-slate-900 text-right">{targetProfile.relationshipPreference || 'Not set'}</span>
+                    {isEditing ? (
+                      <select
+                        value={editedData.relationshipPreference || ''}
+                        onChange={(e) => setEditedData({...editedData, relationshipPreference: e.target.value})}
+                        className="bg-white border border-slate-200 rounded-lg p-1 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10"
+                      >
+                        <option value="">Select</option>
+                        <option value="Men">Men</option>
+                        <option value="Women">Women</option>
+                        <option value="Everyone">Everyone</option>
+                      </select>
+                    ) : (
+                      <span className="font-bold text-slate-900 text-right">{targetProfile.relationshipPreference || 'Not set'}</span>
+                    )}
                   </div>
                 </div>
               </div>
