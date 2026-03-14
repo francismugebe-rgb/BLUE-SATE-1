@@ -19,3 +19,11 @@ export const RELATIONSHIP_STATUS_LIST = [
 export const PRODUCT_CATEGORIES = [
   'Electronics', 'Fashion', 'Home & Garden', 'Beauty', 'Books', 'Sports', 'Toys', 'Other'
 ];
+
+export const COUNTRIES = [
+  'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France', 'Japan', 'China', 'India', 'Brazil', 'South Africa', 'Nigeria', 'Kenya', 'Uganda', 'Tanzania', 'Rwanda', 'Ghana', 'Ethiopia', 'Egypt', 'Morocco'
+];
+
+export const GENDERS = [
+  'Male', 'Female', 'Non-binary', 'Other', 'Prefer not to say'
+];

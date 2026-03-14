@@ -28,3 +28,15 @@ export function validateFile(file: File, type: 'image' | 'video'): { valid: bool
   
   return { valid: true };
 }
+
+export function formatTime(date: string | Date) {
+  const d = new Date(date);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+export function formatCurrency(amount: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount);
+}

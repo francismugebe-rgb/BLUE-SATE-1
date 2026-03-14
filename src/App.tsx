@@ -10,6 +10,10 @@ import Feed from './pages/Feed';
 import Profile from './pages/Profile';
 import Chat from './pages/Chat';
 import Matches from './pages/Matches';
+import Messages from './pages/Messages';
+import Wallet from './pages/Wallet';
+import Pages from './pages/Pages';
+import Groups from './pages/Groups';
 import AdminDashboard from './pages/AdminDashboard';
 import Settings from './pages/Settings';
 import Reels from './pages/Reels';
@@ -43,6 +47,10 @@ function App() {
             <Route path="/feed" element={<Feed />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/profile/:id" element={<Profile />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/wallet" element={<Wallet />} />
+            <Route path="/pages" element={<Pages />} />
+            <Route path="/groups" element={<Groups />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:id" element={<Chat />} />
             <Route path="/matches" element={<Matches />} />

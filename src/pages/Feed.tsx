@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, where, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Post } from '../types';
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X, BadgeCheck, Video, Megaphone, Info, DollarSign } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X, BadgeCheck, Video, Megaphone, Info, DollarSign, Flag, ExternalLink, Smile } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { fileToBase64, validateFile } from '../lib/utils';
+import { accumulatePoints } from '../services/pointService';
+
+const EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
 const Feed: React.FC = () => {
   const { profile } = useAuth();
@@ -16,6 +19,7 @@ const Feed: React.FC = () => {
   const [postImage, setPostImage] = useState('');
   const [isPosting, setIsPosting] = useState(false);
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
+  const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
   const [siteSettings, setSiteSettings] = useState({
     pointValue: 0.01,
     announcement: '',
@@ -38,14 +42,12 @@ const Feed: React.FC = () => {
     if (feedType === 'following' && profile?.following?.length) {
       q = query(postsRef, where('userId', 'in', profile.following), orderBy('createdAt', 'desc'));
     } else if (feedType === 'following') {
-      // If following but no one followed, show nothing or empty
       setPosts([]);
       return;
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
-      // Sort: Verified users first, then by date
       const sortedPosts = [...postsData].sort((a, b) => {
         const aVerified = a.isVerified ? 1 : 0;
         const bVerified = b.isVerified ? 1 : 0;
@@ -63,6 +65,15 @@ const Feed: React.FC = () => {
     e.preventDefault();
     if (!profile || !newPost.trim()) return;
     setIsPosting(true);
+
+    // Simple link detection
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urls = newPost.match(urlRegex);
+    let linkPreview = null;
+    if (urls && urls.length > 0) {
+      linkPreview = { url: urls[0] };
+    }
+
     try {
       await addDoc(collection(db, 'posts'), {
         userId: profile.uid,
@@ -71,10 +82,15 @@ const Feed: React.FC = () => {
         isVerified: profile.isVerified || false,
         content: newPost,
         image: postImage || null,
+        linkPreview,
         likes: [],
         comments: [],
+        views: 0,
         createdAt: new Date().toISOString()
       });
+      
+      await accumulatePoints(profile.uid, 'POST');
+      
       setNewPost('');
       setPostImage('');
     } catch (err) {
@@ -84,19 +100,29 @@ const Feed: React.FC = () => {
     }
   };
 
-  const handleLike = async (post: Post) => {
+  const handleLike = async (postId: string, emoji: string = '❤️') => {
     if (!profile) return;
-    const postRef = doc(db, 'posts', post.id);
-    const isLiked = post.likes.includes(profile.uid);
+    const postRef = doc(db, 'posts', postId);
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    const existingLike = post.likes.find(l => l.userId === profile.uid);
     
     try {
-      if (isLiked) {
-        await updateDoc(postRef, { likes: arrayRemove(profile.uid) });
+      if (existingLike) {
+        if (existingLike.emoji === emoji) {
+          await updateDoc(postRef, { likes: arrayRemove(existingLike) });
+        } else {
+          await updateDoc(postRef, { likes: arrayRemove(existingLike) });
+          await updateDoc(postRef, { likes: arrayUnion({ userId: profile.uid, emoji }) });
+        }
       } else {
-        await updateDoc(postRef, { likes: arrayUnion(profile.uid) });
+        await updateDoc(postRef, { likes: arrayUnion({ userId: profile.uid, emoji }) });
+        await accumulatePoints(profile.uid, 'LIKE');
       }
+      setShowEmojiPicker(null);
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `posts/${post.id}`);
+      handleFirestoreError(err, OperationType.UPDATE, `posts/${postId}`);
     }
   };
 
@@ -114,9 +140,30 @@ const Feed: React.FC = () => {
       await updateDoc(postRef, {
         comments: arrayUnion(newComment)
       });
+      await accumulatePoints(profile.uid, 'COMMENT');
       setCommentText(prev => ({ ...prev, [postId]: '' }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `posts/${postId}`);
+    }
+  };
+
+  const handleReport = async (targetId: string, targetType: 'post' | 'user') => {
+    if (!profile) return;
+    const reason = prompt("Why are you reporting this?");
+    if (!reason) return;
+
+    try {
+      await addDoc(collection(db, 'reports'), {
+        reporterId: profile.uid,
+        targetId,
+        targetType,
+        reason,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      });
+      alert("Thank you for reporting. Our admins will review it.");
+    } catch (err) {
+      console.error("Error reporting:", err);
     }
   };
 
@@ -279,30 +326,71 @@ const Feed: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <button className="text-slate-400 hover:text-slate-600">
-                  <MoreHorizontal className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleReport(post.id, 'post')} className="text-slate-300 hover:text-red-500 transition-colors">
+                    <Flag className="w-4 h-4" />
+                  </button>
+                  <button className="text-slate-400 hover:text-slate-600">
+                    <MoreHorizontal className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
               
               <p className="text-slate-700 leading-relaxed mb-4 whitespace-pre-wrap">
                 {post.content}
               </p>
+
+              {post.linkPreview && (
+                <a 
+                  href={post.linkPreview.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="block p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-all mb-4"
+                >
+                  <div className="flex items-center gap-2 text-[#ff3366] font-bold text-sm mb-1">
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Link Preview</span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate">{post.linkPreview.url}</p>
+                </a>
+              )}
               
               {post.image && (
                 <img src={post.image} className="w-full rounded-2xl mb-4 object-cover max-h-96" referrerPolicy="no-referrer" />
               )}
               
-              <div className="flex items-center gap-6 pt-4 border-t border-slate-50">
-                <button 
-                  onClick={() => handleLike(post)}
-                  className={cn(
-                    "flex items-center gap-2 transition-colors font-bold text-sm",
-                    post.likes.includes(profile?.uid || '') ? "text-[#ff3366]" : "text-slate-400 hover:text-[#ff3366]"
+              <div className="flex items-center gap-6 pt-4 border-t border-slate-50 relative">
+                <div className="relative">
+                  <button 
+                    onMouseEnter={() => setShowEmojiPicker(post.id)}
+                    onClick={() => handleLike(post.id)}
+                    className={cn(
+                      "flex items-center gap-2 transition-colors font-bold text-sm",
+                      post.likes.some(l => l.userId === profile?.uid) ? "text-[#ff3366]" : "text-slate-400 hover:text-[#ff3366]"
+                    )}
+                  >
+                    <Heart className={cn("w-5 h-5", post.likes.some(l => l.userId === profile?.uid) && "fill-current")} />
+                    <span>{post.likes.length}</span>
+                  </button>
+                  
+                  {showEmojiPicker === post.id && (
+                    <div 
+                      className="absolute bottom-full left-0 mb-2 bg-white shadow-xl border border-slate-100 rounded-full p-2 flex gap-2 z-10 animate-in fade-in slide-in-from-bottom-2"
+                      onMouseLeave={() => setShowEmojiPicker(null)}
+                    >
+                      {EMOJIS.map(emoji => (
+                        <button 
+                          key={emoji} 
+                          onClick={() => handleLike(post.id, emoji)}
+                          className="hover:scale-125 transition-transform p-1"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
                   )}
-                >
-                  <Heart className={cn("w-5 h-5", post.likes.includes(profile?.uid || '') && "fill-current")} />
-                  <span>{post.likes.length}</span>
-                </button>
+                </div>
+
                 <button className="flex items-center gap-2 text-slate-400 hover:text-[#6c5ce7] transition-colors font-bold text-sm">
                   <MessageCircle className="w-5 h-5" />
                   <span>{post.comments.length}</span>
@@ -311,6 +399,20 @@ const Feed: React.FC = () => {
                   <Share2 className="w-5 h-5" />
                 </button>
               </div>
+
+              {/* Likes Summary */}
+              {post.likes.length > 0 && (
+                <div className="mt-2 flex items-center gap-1">
+                  <div className="flex -space-x-1">
+                    {Array.from(new Set(post.likes.map(l => l.emoji))).slice(0, 3).map((emoji, i) => (
+                      <span key={i} className="text-xs">{emoji}</span>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-bold">
+                    {post.likes.length} reactions
+                  </span>
+                </div>
+              )}
 
               {/* Comments Section */}
               <div className="mt-6 space-y-4">

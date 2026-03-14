@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { UserProfile, Post } from '../types';
-import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck, BadgeCheck, Star, Trophy, Edit3, Heart, MessageCircle, Settings, Megaphone, Code } from 'lucide-react';
+import { UserProfile, Post, Report, Advert } from '../types';
+import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck, BadgeCheck, Star, Trophy, Edit3, Heart, MessageCircle, Settings, Megaphone, Code, Flag, Check, X, DollarSign, Eye, MousePointer2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
-import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc, onSnapshot, setDoc, where } from 'firebase/firestore';
 
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [adverts, setAdverts] = useState<Advert[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'posts' | 'settings'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'posts' | 'verifications' | 'reports' | 'adverts' | 'settings'>('users');
   const [siteSettings, setSiteSettings] = useState({
     pointValue: 0.01,
     announcement: '',
@@ -41,9 +43,13 @@ const AdminDashboard: React.FC = () => {
       try {
         const usersSnap = await getDocs(query(collection(db, 'users'), limit(50)));
         const postsSnap = await getDocs(query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(50)));
+        const reportsSnap = await getDocs(query(collection(db, 'reports'), orderBy('createdAt', 'desc'), limit(50)));
+        const advertsSnap = await getDocs(query(collection(db, 'adverts'), orderBy('createdAt', 'desc'), limit(50)));
         
         setUsers(usersSnap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
         setPosts(postsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Post)));
+        setReports(reportsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Report)));
+        setAdverts(advertsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Advert)));
       } catch (err) {
         handleFirestoreError(err, OperationType.GET, 'admin_dashboard_fetch');
       } finally {
@@ -74,13 +80,74 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleVerifyUser = async (userId: string, approve: boolean) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        isVerified: approve,
+        isVerifiedPending: false
+      });
+      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, isVerified: approve, isVerifiedPending: false } : u));
+      alert(`User verification ${approve ? 'approved' : 'rejected'}`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+    }
+  };
+
+  const handleBanUser = async (userId: string, ban: boolean) => {
+    if (!window.confirm(`Are you sure you want to ${ban ? 'ban' : 'unban'} this user?`)) return;
+    try {
+      await updateDoc(doc(db, 'users', userId), { isBanned: ban });
+      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, isBanned: ban } : u));
+      alert(`User ${ban ? 'banned' : 'unbanned'} successfully`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+    }
+  };
+
+  const handleSuspendUser = async (userId: string) => {
+    const days = prompt("Enter suspension duration in days (0 to unsuspend):", "7");
+    if (days === null) return;
+    const duration = parseInt(days);
+    const until = duration > 0 ? new Date(Date.now() + duration * 24 * 60 * 60 * 1000).toISOString() : null;
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        isSuspended: duration > 0,
+        suspensionUntil: until
+      });
+      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, isSuspended: duration > 0, suspensionUntil: until } : u));
+      alert(`User ${duration > 0 ? 'suspended' : 'unsuspended'} successfully`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+    }
+  };
+
+  const handleResolveReport = async (reportId: string) => {
+    try {
+      await updateDoc(doc(db, 'reports', reportId), { status: 'resolved' });
+      setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: 'resolved' } : r));
+      alert("Report marked as resolved");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `reports/${reportId}`);
+    }
+  };
+
+  const handleApproveAdvert = async (advertId: string, approve: boolean) => {
+    try {
+      await updateDoc(doc(db, 'adverts', advertId), { status: approve ? 'active' : 'rejected' });
+      setAdverts(prev => prev.map(a => a.id === advertId ? { ...a, status: approve ? 'active' : 'rejected' } : a));
+      alert(`Advert ${approve ? 'approved' : 'rejected'}`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `adverts/${advertId}`);
+    }
+  };
+
   if (loading) return <div className="p-8">Loading dashboard...</div>;
 
   const stats = [
     { label: 'Total Users', value: users.length, icon: Users, color: 'bg-blue-500' },
     { label: 'Total Posts', value: posts.length, icon: FileText, color: 'bg-purple-500' },
-    { label: 'Reports', value: 0, icon: AlertTriangle, color: 'bg-orange-500' },
-    { label: 'Active Now', value: 12, icon: BarChart3, color: 'bg-emerald-500' },
+    { label: 'Reports', value: reports.filter(r => r.status === 'pending').length, icon: AlertTriangle, color: 'bg-orange-500' },
+    { label: 'Active Ads', value: adverts.filter(a => a.status === 'active').length, icon: Megaphone, color: 'bg-emerald-500' },
   ];
 
   return (
@@ -115,7 +182,7 @@ const AdminDashboard: React.FC = () => {
               activeTab === 'users' ? "text-[#ff3366]" : "text-slate-400 hover:text-slate-600"
             )}
           >
-            User Management
+            Users
             {activeTab === 'users' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#ff3366]" />}
           </button>
           <button 
@@ -125,8 +192,38 @@ const AdminDashboard: React.FC = () => {
               activeTab === 'posts' ? "text-[#ff3366]" : "text-slate-400 hover:text-slate-600"
             )}
           >
-            Post Moderation
+            Posts
             {activeTab === 'posts' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#ff3366]" />}
+          </button>
+          <button 
+            onClick={() => setActiveTab('verifications')}
+            className={cn(
+              "px-6 py-4 font-bold text-sm transition-all relative",
+              activeTab === 'verifications' ? "text-[#ff3366]" : "text-slate-400 hover:text-slate-600"
+            )}
+          >
+            Verifications
+            {activeTab === 'verifications' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#ff3366]" />}
+          </button>
+          <button 
+            onClick={() => setActiveTab('reports')}
+            className={cn(
+              "px-6 py-4 font-bold text-sm transition-all relative",
+              activeTab === 'reports' ? "text-[#ff3366]" : "text-slate-400 hover:text-slate-600"
+            )}
+          >
+            Reports
+            {activeTab === 'reports' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#ff3366]" />}
+          </button>
+          <button 
+            onClick={() => setActiveTab('adverts')}
+            className={cn(
+              "px-6 py-4 font-bold text-sm transition-all relative",
+              activeTab === 'adverts' ? "text-[#ff3366]" : "text-slate-400 hover:text-slate-600"
+            )}
+          >
+            Adverts
+            {activeTab === 'adverts' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#ff3366]" />}
           </button>
           <button 
             onClick={() => setActiveTab('settings')}
@@ -135,7 +232,7 @@ const AdminDashboard: React.FC = () => {
               activeTab === 'settings' ? "text-[#ff3366]" : "text-slate-400 hover:text-slate-600"
             )}
           >
-            Site Settings
+            Settings
             {activeTab === 'settings' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#ff3366]" />}
           </button>
         </div>
@@ -205,8 +302,20 @@ const AdminDashboard: React.FC = () => {
                             <ShieldCheck className="w-4 h-4" />
                           </button>
                         )}
-                        <button className="p-2 text-slate-400 hover:text-orange-500 transition-colors"><Ban className="w-4 h-4" /></button>
-                        <button className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                        <button 
+                          onClick={() => handleSuspendUser(user.uid)}
+                          className={cn("p-2 transition-colors", user.isSuspended ? "text-orange-500" : "text-slate-400 hover:text-orange-500")}
+                          title={user.isSuspended ? "Unsuspend" : "Suspend"}
+                        >
+                          <AlertTriangle className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleBanUser(user.uid, !user.isBanned)}
+                          className={cn("p-2 transition-colors", user.isBanned ? "text-red-600" : "text-slate-400 hover:text-red-600")}
+                          title={user.isBanned ? "Unban" : "Ban"}
+                        >
+                          <Ban className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -216,29 +325,109 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'posts' && (
+        {activeTab === 'verifications' && (
           <div className="p-8 space-y-6">
-            {posts.map(post => (
-              <div key={post.id} className="flex gap-4 p-4 rounded-2xl hover:bg-slate-50 transition-all group">
-                <img src={post.authorPhoto || `https://picsum.photos/seed/${post.userId}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-slate-700 line-clamp-2 leading-relaxed">{post.content}</p>
-                  <div className="flex items-center gap-4 mt-1">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">by {post.authorName}</p>
-                    <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> {post.likes.length}</span>
-                      <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {post.comments.length}</span>
-                    </div>
+            <h3 className="text-xl font-black text-slate-900">Verification Requests</h3>
+            {users.filter(u => u.isVerifiedPending).map(user => (
+              <div key={user.uid} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-3">
+                  <img src={user.photos?.[0]} className="w-12 h-12 rounded-xl object-cover" />
+                  <div>
+                    <p className="font-bold text-slate-900">{user.name}</p>
+                    <p className="text-xs text-slate-400">{user.email}</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => handleDeletePost(post.id)}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => handleVerifyUser(user.uid, true)} className="p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-all">
+                    <Check className="w-5 h-5" />
+                  </button>
+                  <button onClick={() => handleVerifyUser(user.uid, false)} className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-all">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             ))}
+            {users.filter(u => u.isVerifiedPending).length === 0 && <p className="text-center py-12 text-slate-400 font-bold italic">No pending requests</p>}
+          </div>
+        )}
+
+        {activeTab === 'reports' && (
+          <div className="p-8 space-y-6">
+            <h3 className="text-xl font-black text-slate-900">Content Reports</h3>
+            {reports.map(report => (
+              <div key={report.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-2">
+                    <Flag className="w-4 h-4 text-red-500" />
+                    <span className="text-sm font-bold text-slate-900 uppercase tracking-wider">{report.targetType} Report</span>
+                    <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-black uppercase", report.status === 'pending' ? "bg-orange-100 text-orange-600" : "bg-emerald-100 text-emerald-600")}>
+                      {report.status}
+                    </span>
+                  </div>
+                  {report.status === 'pending' && (
+                    <button onClick={() => handleResolveReport(report.id)} className="text-xs font-bold text-emerald-600 hover:underline">Mark Resolved</button>
+                  )}
+                </div>
+                <p className="text-sm text-slate-600 font-medium bg-white p-3 rounded-xl border border-slate-100 italic">"{report.reason}"</p>
+                <div className="flex justify-between text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                  <span>By: {report.reporterId}</span>
+                  <span>Target: {report.targetId}</span>
+                </div>
+              </div>
+            ))}
+            {reports.length === 0 && <p className="text-center py-12 text-slate-400 font-bold italic">No reports yet</p>}
+          </div>
+        )}
+
+        {activeTab === 'adverts' && (
+          <div className="p-8 space-y-6">
+            <h3 className="text-xl font-black text-slate-900">Sponsored Adverts</h3>
+            {adverts.map(ad => (
+              <div key={ad.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-3">
+                    <img src={ad.imageUrl || 'https://picsum.photos/seed/ad/200/200'} className="w-16 h-16 rounded-xl object-cover" />
+                    <div>
+                      <h4 className="font-bold text-slate-900">{ad.title}</h4>
+                      <p className="text-xs text-slate-500">{ad.description || 'No description'}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-black uppercase", 
+                      ad.status === 'active' ? "bg-emerald-100 text-emerald-600" : 
+                      ad.status === 'pending' ? "bg-orange-100 text-orange-600" : "bg-red-100 text-red-600"
+                    )}>
+                      {ad.status}
+                    </span>
+                    {ad.status === 'pending' && (
+                      <div className="flex gap-2">
+                        <button onClick={() => handleApproveAdvert(ad.id, true)} className="p-1 bg-emerald-100 text-emerald-600 rounded hover:bg-emerald-200"><Check className="w-4 h-4" /></button>
+                        <button onClick={() => handleApproveAdvert(ad.id, false)} className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200"><X className="w-4 h-4" /></button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-4 pt-4 border-t border-slate-200">
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Type</p>
+                    <p className="text-sm font-black text-slate-900">{ad.type}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Budget</p>
+                    <p className="text-sm font-black text-slate-900">${ad.budget}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Clicks</p>
+                    <p className="text-sm font-black text-slate-900 flex items-center justify-center gap-1"><MousePointer2 className="w-3 h-3" /> {ad.clicks}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Impressions</p>
+                    <p className="text-sm font-black text-slate-900 flex items-center justify-center gap-1"><Eye className="w-3 h-3" /> {ad.impressions}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {adverts.length === 0 && <p className="text-center py-12 text-slate-400 font-bold italic">No adverts yet</p>}
           </div>
         )}
         {activeTab === 'settings' && (

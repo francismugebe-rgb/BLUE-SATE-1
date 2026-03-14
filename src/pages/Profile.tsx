@@ -4,9 +4,11 @@ import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, query, where, g
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile, Post, Reel } from '../types';
-import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play } from 'lucide-react';
-import { INTERESTS_LIST, RELATIONSHIP_STATUS_LIST } from '../constants';
+import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search } from 'lucide-react';
+import { INTERESTS_LIST, RELATIONSHIP_STATUS_LIST, COUNTRIES, GENDERS } from '../constants';
 import { cn, fileToBase64, validateFile } from '../lib/utils';
+import { createTransaction } from '../services/pointService';
+import { TransactionType } from '../types';
 
 const Profile: React.FC = () => {
   const { id } = useParams();
@@ -20,6 +22,8 @@ const Profile: React.FC = () => {
   const [userReels, setUserReels] = useState<Reel[]>([]);
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [friendCount, setFriendCount] = useState(0);
+  const [matchingUsers, setMatchingUsers] = useState<UserProfile[]>([]);
+  const [isMatching, setIsMatching] = useState(false);
 
   const isOwnProfile = !id || id === authUser?.uid;
   const canEdit = isOwnProfile || isAdmin;
@@ -79,6 +83,7 @@ const Profile: React.FC = () => {
     try {
       await updateDoc(doc(db, 'users', targetProfile.uid), editedData);
       setIsEditing(false);
+      alert('Profile saved successfully!');
       if (!isOwnProfile) {
         // If admin edited, refresh target profile
         const snap = await getDoc(doc(db, 'users', targetProfile.uid));
@@ -187,6 +192,67 @@ const Profile: React.FC = () => {
     setEditedData({ ...editedData, interests: newInterests });
   };
 
+  const handleUpgradeProfile = async () => {
+    if (!profile) return;
+    const cost = 500; // Example cost in points
+    if (profile.points < cost) {
+      alert(`You need ${cost} points to upgrade your profile. You have ${profile.points}.`);
+      return;
+    }
+
+    if (confirm(`Upgrade to Premium for ${cost} points?`)) {
+      try {
+        await createTransaction(profile.uid, -cost, TransactionType.PAYMENT, 'Profile Upgrade to Premium');
+        await updateDoc(doc(db, 'users', profile.uid), { isPremium: true });
+        alert('Profile upgraded to Premium!');
+      } catch (err) {
+        alert('Failed to upgrade profile.');
+      }
+    }
+  };
+
+  const handleRequestVerification = async () => {
+    if (!profile) return;
+    const cost = 1000; // Example cost in points
+    if (profile.points < cost) {
+      alert(`You need ${cost} points for verification. You have ${profile.points}.`);
+      return;
+    }
+
+    if (confirm(`Request verification for ${cost} points?`)) {
+      try {
+        await createTransaction(profile.uid, -cost, TransactionType.PAYMENT, 'Verification Request');
+        await updateDoc(doc(db, 'users', profile.uid), { isVerifiedPending: true });
+        alert('Verification request submitted!');
+      } catch (err) {
+        alert('Failed to submit request.');
+      }
+    }
+  };
+
+  const handleMatch = async () => {
+    if (!profile) return;
+    setIsMatching(true);
+    try {
+      const q = query(
+        collection(db, 'users'),
+        where('gender', '==', profile.interestedIn || (profile.gender === 'Male' ? 'Female' : 'Male')),
+        limit(10)
+      );
+      const snap = await getDocs(q);
+      const matches = snap.docs
+        .map(d => d.data() as UserProfile)
+        .filter(u => u.uid !== profile.uid);
+      setMatchingUsers(matches);
+      setActiveTab('friends'); // Show matches in friends tab area or similar
+      alert(`Found ${matches.length} potential matches!`);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsMatching(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-full">Loading profile...</div>;
   if (!targetProfile) return <div className="text-center py-20">Profile not found</div>;
 
@@ -251,18 +317,38 @@ const Profile: React.FC = () => {
               </div>
             </div>
 
-            <div className="mb-6 flex gap-2">
+            <div className="mb-6 flex flex-wrap gap-2 justify-center md:justify-start">
               {canEdit && (
-                <button 
-                  onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-                  className={cn(
-                    "px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 shadow-sm",
-                    isEditing ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-900 hover:bg-slate-200"
+                <>
+                  <button 
+                    onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+                    className={cn(
+                      "px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 shadow-sm",
+                      isEditing ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-900 hover:bg-slate-200"
+                    )}
+                  >
+                    {isEditing ? <Check className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+                    <span>{isEditing ? 'Save' : 'Edit Profile'}</span>
+                  </button>
+                  {isOwnProfile && !profile?.isPremium && (
+                    <button onClick={handleUpgradeProfile} className="bg-amber-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-amber-600 transition-all flex items-center gap-2 shadow-sm">
+                      <Zap className="w-4 h-4" />
+                      <span>Upgrade</span>
+                    </button>
                   )}
-                >
-                  {isEditing ? <Check className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
-                  <span>{isEditing ? 'Save' : 'Edit Profile'}</span>
-                </button>
+                  {isOwnProfile && !profile?.isVerified && !profile?.isVerifiedPending && (
+                    <button onClick={handleRequestVerification} className="bg-[#00a2ff] text-white px-4 py-2 rounded-lg font-bold hover:bg-[#0088d6] transition-all flex items-center gap-2 shadow-sm">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Verify</span>
+                    </button>
+                  )}
+                  {isOwnProfile && (
+                    <button onClick={handleMatch} disabled={isMatching} className="bg-rose-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-rose-600 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50">
+                      <Search className="w-4 h-4" />
+                      <span>{isMatching ? 'Matching...' : 'Find Matches'}</span>
+                    </button>
+                  )}
+                </>
               )}
               {!isOwnProfile && (
                 <>
@@ -325,36 +411,60 @@ const Profile: React.FC = () => {
               <p className="text-center text-slate-700 font-medium">{targetProfile.bio || 'No bio yet'}</p>
             )}
             
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 text-slate-600">
-                <MapPin className="w-5 h-5 text-slate-400" />
-                <span className="text-sm">Lives in <span className="font-bold text-slate-900">{targetProfile.location || 'Unknown'}</span></span>
-              </div>
-              <div className="flex items-center gap-3 text-slate-600">
-                <Briefcase className="w-5 h-5 text-slate-400" />
-                <span className="text-sm">Works as <span className="font-bold text-slate-900">{targetProfile.occupation || 'Professional'}</span></span>
-              </div>
-              <div className="flex items-center gap-3 text-slate-600">
-                <Heart className="w-5 h-5 text-slate-400" />
-                <span className="text-sm"><span className="font-bold text-slate-900">{targetProfile.relationshipStatus || 'Single'}</span></span>
-              </div>
-              <div className="flex items-center gap-3 text-slate-600">
-                <Star className="w-5 h-5 text-slate-400" />
-                <span className="text-sm"><span className="font-bold text-slate-900">{targetProfile.points}</span> Points earned</span>
-              </div>
-            </div>
-
-            {isEditing && (
-              <div className="pt-4 border-t border-slate-100 space-y-4">
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Location" value={editedData.location || ''} onChange={e => setEditedData({...editedData, location: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
-                  <input type="text" placeholder="Occupation" value={editedData.occupation || ''} onChange={e => setEditedData({...editedData, occupation: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 text-slate-600">
+                  <MapPin className="w-5 h-5 text-slate-400" />
+                  <span className="text-sm">Lives in <span className="font-bold text-slate-900">{targetProfile.city}, {targetProfile.country}</span></span>
                 </div>
-                <select value={editedData.relationshipStatus || ''} onChange={e => setEditedData({...editedData, relationshipStatus: e.target.value})} className="w-full bg-slate-50 p-2 rounded-lg text-xs border">
-                  {RELATIONSHIP_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <div className="flex items-center gap-3 text-slate-600">
+                  <Globe className="w-5 h-5 text-slate-400" />
+                  <span className="text-sm">From <span className="font-bold text-slate-900">{targetProfile.country || 'Unknown'}</span></span>
+                </div>
+                <div className="flex items-center gap-3 text-slate-600">
+                  <Briefcase className="w-5 h-5 text-slate-400" />
+                  <span className="text-sm">Works as <span className="font-bold text-slate-900">{targetProfile.occupation || 'Professional'}</span></span>
+                </div>
+                <div className="flex items-center gap-3 text-slate-600">
+                  <Heart className="w-5 h-5 text-slate-400" />
+                  <span className="text-sm"><span className="font-bold text-slate-900">{targetProfile.relationshipStatus || 'Single'}</span></span>
+                </div>
+                <div className="flex items-center gap-3 text-slate-600">
+                  <User className="w-5 h-5 text-slate-400" />
+                  <span className="text-sm"><span className="font-bold text-slate-900">{targetProfile.gender}</span> interested in <span className="font-bold text-slate-900">{targetProfile.interestedIn}</span></span>
+                </div>
+                <div className="flex items-center gap-3 text-slate-600">
+                  <Star className="w-5 h-5 text-slate-400" />
+                  <span className="text-sm"><span className="font-bold text-slate-900">{targetProfile.points}</span> Points earned</span>
+                </div>
               </div>
-            )}
+
+              {isEditing && (
+                <div className="pt-4 border-t border-slate-100 space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={editedData.country || ''} onChange={e => setEditedData({...editedData, country: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border">
+                      <option value="">Select Country</option>
+                      {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <input type="text" placeholder="City" value={editedData.city || ''} onChange={e => setEditedData({...editedData, city: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={editedData.gender || ''} onChange={e => setEditedData({...editedData, gender: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border">
+                      <option value="">Gender</option>
+                      {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                    <select value={editedData.interestedIn || ''} onChange={e => setEditedData({...editedData, interestedIn: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border">
+                      <option value="">Interested In</option>
+                      {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" placeholder="Occupation" value={editedData.occupation || ''} onChange={e => setEditedData({...editedData, occupation: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
+                    <select value={editedData.relationshipStatus || ''} onChange={e => setEditedData({...editedData, relationshipStatus: e.target.value})} className="w-full bg-slate-50 p-2 rounded-lg text-xs border">
+                      {RELATIONSHIP_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
           </div>
 
           {/* Photos Preview */}
@@ -465,15 +575,18 @@ const Profile: React.FC = () => {
 
           {activeTab === 'friends' && (
             <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-              <h3 className="text-2xl font-black text-slate-900 mb-6">Friends</h3>
+              <h3 className="text-2xl font-black text-slate-900 mb-6">{matchingUsers.length > 0 ? 'Matches' : 'Friends'}</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {friends.map((friend, i) => (
+                {(matchingUsers.length > 0 ? matchingUsers : friends).map((friend, i) => (
                   <div key={i} className="flex items-center gap-3 p-3 border border-slate-100 rounded-xl hover:bg-slate-50 transition-all cursor-pointer">
-                    <img src={friend.photos?.[0]} className="w-16 h-16 rounded-lg object-cover" />
+                    <img src={friend.photos?.[0] || `https://picsum.photos/seed/${friend.uid}/100/100`} className="w-16 h-16 rounded-lg object-cover" />
                     <p className="font-bold text-slate-900">{friend.name}</p>
                   </div>
                 ))}
               </div>
+              {matchingUsers.length > 0 && (
+                <button onClick={() => setMatchingUsers([])} className="mt-6 text-slate-500 text-sm font-bold hover:underline">Back to friends</button>
+              )}
             </div>
           )}
 

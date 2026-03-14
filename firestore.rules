@@ -66,6 +66,13 @@ service cloud.firestore {
          (request.auth.token.email.lower() == "francismugebe@gmail.com" && request.auth.token.email_verified == true));
     }
 
+    function isNotBanned() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) || (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isBanned', false) == false && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isSuspended', false) == false
+      );
+    }
+
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
     }
@@ -95,6 +102,37 @@ service cloud.firestore {
              data.createdAt is string;
     }
 
+    function isValidPage(data) {
+      return hasRequiredFields(['ownerId', 'title', 'createdAt']) &&
+             data.ownerId is string && data.title is string && data.title.size() > 0;
+    }
+
+    function isValidGroup(data) {
+      return hasRequiredFields(['ownerId', 'title', 'createdAt']) &&
+             data.ownerId is string && data.title is string && data.title.size() > 0;
+    }
+
+    function isValidReport(data) {
+      return hasRequiredFields(['reporterId', 'targetId', 'targetType', 'reason', 'status', 'createdAt']) &&
+             data.reporterId is string && data.targetId is string &&
+             data.targetType in ['user', 'post', 'comment', 'reel'] &&
+             data.status in ['pending', 'resolved'];
+    }
+
+    function isValidAdvert(data) {
+      return hasRequiredFields(['sponsorId', 'title', 'type', 'budget', 'status', 'createdAt']) &&
+             data.sponsorId is string && data.title is string &&
+             data.type in ['cpc', 'impression'] &&
+             data.status in ['active', 'paused', 'completed', 'pending'];
+    }
+
+    function isValidTransaction(data) {
+      return hasRequiredFields(['userId', 'amount', 'type', 'status', 'createdAt']) &&
+             data.userId is string && data.amount is number &&
+             data.type in ['deposit', 'withdrawal', 'payment', 'points_conversion'] &&
+             data.status in ['pending', 'completed', 'failed'];
+    }
+
     function isValidNotification(data) {
       return hasRequiredFields(['receiverId', 'senderId', 'senderName', 'type', 'read', 'createdAt']) &&
              data.receiverId is string && data.senderId is string &&
@@ -115,9 +153,6 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      // Allow authenticated users to list/get profiles for discovery
-      // CRITICAL: We should ideally split PII into a private collection.
-      // For now, we allow read but warn that email is exposed.
       allow read: if isAuthenticated();
       
       allow create: if isAuthenticated() && 
@@ -126,8 +161,7 @@ service cloud.firestore {
                       (request.resource.data.role == 'user' || isAdmin());
                       
       allow update: if isAuthenticated() && 
-                      isValidUser(request.resource.data) && 
-                      (isOwner(userId) && request.resource.data.role == resource.data.role || isAdmin());
+                      (isOwner(userId) || isAdmin());
       
       allow delete: if isAdmin();
     }
@@ -135,20 +169,54 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read: if isAuthenticated();
       
-      allow create: if isAuthenticated() && 
+      allow create: if isAuthenticated() && isNotBanned() &&
                       isValidPost(request.resource.data) && 
                       isOwner(request.resource.data.userId);
                       
-      allow update: if isAuthenticated() && 
+      allow update: if isAuthenticated() && isNotBanned() &&
                       (
-                        // Allow anyone to like/comment if they don't change other fields
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'comments']) ||
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'comments', 'views']) ||
                         isOwner(resource.data.userId) || 
                         isAdmin()
                       );
                       
       allow delete: if isAuthenticated() && 
                       (isOwner(resource.data.userId) || isAdmin());
+    }
+
+    match /pages/{pageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBanned() && isValidPage(request.resource.data);
+      allow update: if isAuthenticated() && (isOwner(resource.data.ownerId) || isAdmin());
+      allow delete: if isAuthenticated() && (isOwner(resource.data.ownerId) || isAdmin());
+    }
+
+    match /groups/{groupId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBanned() && isValidGroup(request.resource.data);
+      allow update: if isAuthenticated() && (isOwner(resource.data.ownerId) || isAdmin());
+      allow delete: if isAuthenticated() && (isOwner(resource.data.ownerId) || isAdmin());
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isNotBanned() && isValidReport(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /adverts/{advertId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBanned() && isValidAdvert(request.resource.data);
+      allow update: if isAuthenticated() && (isOwner(resource.data.sponsorId) || isAdmin());
+      allow delete: if isAuthenticated() && (isOwner(resource.data.sponsorId) || isAdmin());
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
+      allow create: if isAuthenticated() && isNotBanned() && isValidTransaction(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /notifications/{notificationId} {
@@ -164,22 +232,22 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && isOwner(resource.data.receiverId);
     }
 
-    match /chats/{chatId}/messages/{messageId} {
-      function isChatParticipant() {
-        return isAuthenticated() && (request.auth.uid in chatId.split('_'));
-      }
+    match /chats/{chatId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow create: if isAuthenticated() && request.auth.uid in request.resource.data.participants;
+      allow update: if isAuthenticated() && request.auth.uid in resource.data.participants;
 
-      allow read: if isChatParticipant();
-      
-      allow create: if isChatParticipant() && 
-                      isValidMessage(request.resource.data) && 
-                      isOwner(request.resource.data.senderId);
-                      
-      allow update: if isChatParticipant() && 
-                      isOwner(resource.data.receiverId) && 
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-                      
-      allow delete: if isAdmin();
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow create: if isAuthenticated() && 
+                        request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants &&
+                        isValidMessage(request.resource.data) && 
+                        isOwner(request.resource.data.senderId);
+        allow update: if isAuthenticated() && 
+                        request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants &&
+                        isOwner(resource.data.receiverId) && 
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      }
     }
 
     // Default deny

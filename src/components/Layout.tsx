@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, User, Compass, LayoutGrid, Settings, LogOut, ShieldCheck, PlayCircle, ShoppingBag } from 'lucide-react';
+import { Heart, MessageCircle, User, Compass, LayoutGrid, Settings, LogOut, ShieldCheck, PlayCircle, ShoppingBag, Wallet, Flag, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../firebase';
 import { cn } from '../lib/utils';
@@ -20,12 +20,14 @@ const Layout: React.FC<LayoutProps> = ({ admin }) => {
   };
 
   const navItems = [
-    { icon: Compass, label: 'Discover', path: '/discover' },
     { icon: LayoutGrid, label: 'Feed', path: '/feed' },
+    { icon: Compass, label: 'Discover', path: '/discover' },
     { icon: PlayCircle, label: 'Reels', path: '/reels' },
-    { icon: ShoppingBag, label: 'Market', path: '/market' },
     { icon: Heart, label: 'Matches', path: '/matches' },
-    { icon: MessageCircle, label: 'Chat', path: '/chat' },
+    { icon: MessageCircle, label: 'Messages', path: '/messages' },
+    { icon: Flag, label: 'Pages', path: '/pages' },
+    { icon: Users, label: 'Groups', path: '/groups' },
+    { icon: Wallet, label: 'Wallet', path: '/wallet' },
     { icon: User, label: 'Profile', path: '/profile' },
   ];
 
