@@ -8,6 +8,12 @@ const Landing: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    if (user) {
+      navigate('/feed');
+    }
+  }, [user, navigate]);
+
   if (user) {
     return <div className="flex items-center justify-center min-h-screen">Redirecting...</div>;
   }
