@@ -212,6 +212,11 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (isOwner(resource.data.sponsorId) || isAdmin());
     }
 
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /transactions/{transactionId} {
       allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
       allow create: if isAuthenticated() && isNotBanned() && isValidTransaction(request.resource.data);

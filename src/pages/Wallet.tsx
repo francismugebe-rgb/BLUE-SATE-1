@@ -26,6 +26,9 @@ const Wallet: React.FC = () => {
     const unsub = onSnapshot(q, (snap) => {
       setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'transactions');
+      setLoading(false);
     });
 
     // Fetch point value from settings

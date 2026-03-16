@@ -37,6 +37,8 @@ const GroupDetails: React.FC = () => {
 
     const unsubPosts = onSnapshot(postsQuery, (snap) => {
       setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Post)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'posts');
     });
 
     return () => {

@@ -19,6 +19,9 @@ const Pages: React.FC = () => {
     const unsub = onSnapshot(q, (snap) => {
       setPages(snap.docs.map(d => ({ id: d.id, ...d.data() } as Page)));
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'pages');
+      setLoading(false);
     });
     return () => unsub();
   }, []);

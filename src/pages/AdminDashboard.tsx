@@ -26,6 +26,8 @@ const AdminDashboard: React.FC = () => {
       if (snap.exists()) {
         setSiteSettings(snap.data() as any);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/site');
     });
     return () => unsubSettings();
   }, []);

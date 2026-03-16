@@ -19,6 +19,9 @@ const Groups: React.FC = () => {
     const unsub = onSnapshot(q, (snap) => {
       setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() } as Group)));
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'groups');
+      setLoading(false);
     });
     return () => unsub();
   }, []);

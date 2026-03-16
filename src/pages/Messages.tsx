@@ -50,6 +50,9 @@ const Messages: React.FC = () => {
         setChatUsers(newUsers);
       }
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'chats');
+      setLoading(false);
     });
 
     return () => unsub();
@@ -74,6 +77,8 @@ const Messages: React.FC = () => {
           updateDoc(doc(db, `chats/${activeChat.id}/messages`, m.id), { read: true });
         }
       });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `chats/${activeChat.id}/messages`);
     });
 
     return () => unsub();

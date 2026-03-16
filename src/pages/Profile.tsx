@@ -35,12 +35,16 @@ const Profile: React.FC = () => {
     const postsQuery = query(collection(db, 'posts'), where('userId', '==', targetProfile.uid), orderBy('createdAt', 'desc'));
     const unsubPosts = onSnapshot(postsQuery, (snap) => {
       setUserPosts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Post)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'posts');
     });
 
     // Fetch user reels
     const reelsQuery = query(collection(db, 'reels'), where('userId', '==', targetProfile.uid), orderBy('createdAt', 'desc'));
     const unsubReels = onSnapshot(reelsQuery, (snap) => {
       setUserReels(snap.docs.map(d => ({ id: d.id, ...d.data() } as Reel)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'reels');
     });
 
     // Fetch friends (followers for now)
