@@ -4,7 +4,9 @@ import { UserProfile, Post, Report, Advert } from '../types';
 import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck, BadgeCheck, Star, Trophy, Edit3, Heart, MessageCircle, Settings, Megaphone, Code, Flag, Check, X, DollarSign, Eye, MousePointer2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
-import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc, onSnapshot, setDoc, where } from 'firebase/firestore';
+import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc, onSnapshot, setDoc, where, increment } from 'firebase/firestore';
+import { createTransaction } from '../services/pointService';
+import { TransactionType } from '../types';
 
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -138,6 +140,20 @@ const AdminDashboard: React.FC = () => {
       alert(`Advert ${approve ? 'approved' : 'rejected'}`);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `adverts/${advertId}`);
+    }
+  };
+
+  const handleFundUser = async (userId: string) => {
+    const amountStr = prompt("Enter amount to fund ($):", "10");
+    if (amountStr === null) return;
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount) || amount <= 0) return;
+
+    try {
+      await createTransaction(userId, amount, TransactionType.DEPOSIT, 'Admin Funding');
+      alert(`Successfully funded user account with $${amount}`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
     }
   };
 
@@ -293,6 +309,13 @@ const AdminDashboard: React.FC = () => {
                         >
                           <Edit3 className="w-4 h-4" />
                         </Link>
+                        <button 
+                          onClick={() => handleFundUser(user.uid)}
+                          className="p-2 text-slate-400 hover:text-emerald-500 transition-colors"
+                          title="Fund Account"
+                        >
+                          <DollarSign className="w-4 h-4" />
+                        </button>
                         {user.role !== 'admin' && (
                           <button 
                             onClick={() => handlePromote(user.uid)}

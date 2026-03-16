@@ -13,7 +13,7 @@ export const INTERESTS_LIST = [
 ];
 
 export const RELATIONSHIP_STATUS_LIST = [
-  'Single', 'In a relationship', 'Engaged', 'Married', 'Complicated', 'Separated', 'Divorced', 'Widowed'
+  'Single', 'In a relationship', 'Engaged', 'Married', 'Complicated', 'Separated', 'Divorced', 'Widowed', 'Single Mother', 'Single Father'
 ];
 
 export const PRODUCT_CATEGORIES = [

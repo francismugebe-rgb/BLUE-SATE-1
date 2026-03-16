@@ -41,15 +41,41 @@ const Wallet: React.FC = () => {
     const val = parseFloat(amount);
     if (isNaN(val) || val <= 0) return;
 
-    // Simulate PayPal redirect
-    alert("Redirecting to PayPal...");
-    
     try {
-      await createTransaction(authUser.uid, val, TransactionType.DEPOSIT, 'PayPal');
-      setAmount('');
-      alert("Deposit successful!");
+      // 1. Create order on server
+      const response = await fetch('/api/paypal/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: val.toFixed(2) }),
+      });
+      const order = await response.json();
+
+      if (order.id) {
+        // In a real app, we'd use the PayPal JS SDK to show the buttons.
+        // For this demo, we'll simulate the capture after a "successful" payment.
+        // The user would normally click the PayPal button which opens a popup.
+        
+        const confirmPayment = confirm(`Simulate PayPal Payment for ${formatCurrency(val)}? (Order ID: ${order.id})`);
+        if (confirmPayment) {
+          const captureResponse = await fetch('/api/paypal/capture-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderID: order.id }),
+          });
+          const captureData = await captureResponse.json();
+
+          if (captureData.status === 'COMPLETED') {
+            await createTransaction(authUser.uid, val, TransactionType.DEPOSIT, 'PayPal');
+            setAmount('');
+            alert("Deposit successful!");
+          } else {
+            alert("Payment failed or was not completed.");
+          }
+        }
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'transactions');
+      console.error('PayPal Error:', err);
+      alert("PayPal integration error. Please check your credentials.");
     }
   };
 
@@ -95,8 +121,18 @@ const Wallet: React.FC = () => {
       });
       
       await createTransaction(authUser.uid, -budgetVal, TransactionType.PAYMENT, `Ad Sponsorship: ${newAd.title}`);
+      
+      // Shift level for sponsoring
+      const levels: ('Bronze' | 'Gold' | 'Platinum')[] = ['Bronze', 'Gold', 'Platinum'];
+      const currentIdx = levels.indexOf(profile?.level || 'Bronze');
+      const nextLevel = levels[Math.min(currentIdx + 1, levels.length - 1)];
+      
+      await updateDoc(doc(db, 'users', authUser.uid), { 
+        level: nextLevel 
+      });
+
       setShowAdModal(false);
-      alert("Ad submitted for approval!");
+      alert("Ad submitted for approval! Your level has been upgraded for sponsoring content.");
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'adverts');
     }

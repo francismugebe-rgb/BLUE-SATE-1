@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, where, increment } from 'firebase/firestore';
+import { Link, useNavigate } from 'react-router-dom';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, where, increment, getDocs, limit as firestoreLimit } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Post } from '../types';
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X, BadgeCheck, Video, Megaphone, Info, DollarSign, Flag, ExternalLink, Smile } from 'lucide-react';
+import { Post, UserProfile, Page, Group } from '../types';
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X, BadgeCheck, Video, Megaphone, Info, DollarSign, Flag, ExternalLink, Smile, Users, Plus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { fileToBase64, validateFile } from '../lib/utils';
@@ -13,7 +14,13 @@ const EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
 const Feed: React.FC = () => {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
+  const [suggestedUsers, setSuggestedUsers] = useState<UserProfile[]>([]);
+  const [matches, setMatches] = useState<UserProfile[]>([]);
+  const [suggestedPages, setSuggestedPages] = useState<Page[]>([]);
+  const [suggestedGroups, setSuggestedGroups] = useState<Group[]>([]);
+  const [trendingHashtags, setTrendingHashtags] = useState<{tag: string, count: number}[]>([]);
   const [feedType, setFeedType] = useState<'global' | 'following'>('global');
   const [newPost, setNewPost] = useState('');
   const [postImage, setPostImage] = useState('');
@@ -60,6 +67,61 @@ const Feed: React.FC = () => {
     });
     return () => unsubscribe();
   }, [feedType, profile?.following]);
+  
+  useEffect(() => {
+    if (!profile) return;
+
+    // Suggested Users
+    const fetchSuggestions = async () => {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, firestoreLimit(5));
+      const snap = await getDocs(q);
+      const allUsers = snap.docs.map(d => d.data() as UserProfile);
+      
+      setSuggestedUsers(allUsers.filter(u => u.uid !== profile.uid && !profile.following?.includes(u.uid)));
+
+      // Matches (Complete profiles + Gender preference)
+      const potentialMatches = allUsers.filter(u => {
+        if (u.uid === profile.uid) return false;
+        const isComplete = u.name && u.photos?.length && u.bio && u.city && u.country;
+        const genderMatch = !profile.interestedIn || profile.interestedIn === 'Both' || u.gender === profile.interestedIn;
+        return isComplete && genderMatch;
+      });
+      setMatches(potentialMatches.slice(0, 3));
+
+      // Suggested Pages
+      const pagesRef = collection(db, 'pages');
+      const pq = query(pagesRef, firestoreLimit(3));
+      const psnap = await getDocs(pq);
+      setSuggestedPages(psnap.docs.map(d => ({ id: d.id, ...d.data() } as Page)));
+
+      // Suggested Groups
+      const groupsRef = collection(db, 'groups');
+      const gq = query(groupsRef, firestoreLimit(3));
+      const gsnap = await getDocs(gq);
+      setSuggestedGroups(gsnap.docs.map(d => ({ id: d.id, ...d.data() } as Group)));
+    };
+
+    fetchSuggestions();
+  }, [profile]);
+
+  useEffect(() => {
+    // Extract hashtags from posts
+    const tags: { [key: string]: number } = {};
+    posts.forEach(post => {
+      const matches = post.content.match(/#\w+/g);
+      if (matches) {
+        matches.forEach(tag => {
+          tags[tag] = (tags[tag] || 0) + 1;
+        });
+      }
+    });
+    const sortedTags = Object.entries(tags)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([tag, count]) => ({ tag: tag.replace('#', ''), count }));
+    setTrendingHashtags(sortedTags);
+  }, [posts]);
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +181,20 @@ const Feed: React.FC = () => {
       } else {
         await updateDoc(postRef, { likes: arrayUnion({ userId: profile.uid, emoji }) });
         await accumulatePoints(profile.uid, 'LIKE');
+        
+        // Notify author
+        const post = posts.find(p => p.id === postId);
+        if (post && post.userId !== profile.uid) {
+          await addDoc(collection(db, 'notifications'), {
+            receiverId: post.userId,
+            senderId: profile.uid,
+            senderName: profile.name,
+            type: 'like',
+            targetId: postId,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+        }
       }
       setShowEmojiPicker(null);
     } catch (err) {
@@ -141,6 +217,21 @@ const Feed: React.FC = () => {
         comments: arrayUnion(newComment)
       });
       await accumulatePoints(profile.uid, 'COMMENT');
+      
+      // Notify author
+      const post = posts.find(p => p.id === postId);
+      if (post && post.userId !== profile.uid) {
+        await addDoc(collection(db, 'notifications'), {
+          receiverId: post.userId,
+          senderId: profile.uid,
+          senderName: profile.name,
+          type: 'comment',
+          targetId: postId,
+          read: false,
+          createdAt: new Date().toISOString()
+        });
+      }
+
       setCommentText(prev => ({ ...prev, [postId]: '' }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `posts/${postId}`);
@@ -304,14 +395,14 @@ const Feed: React.FC = () => {
           <div key={post.id} className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
-                <div className="flex gap-3">
-                  <img src={post.authorPhoto || `https://picsum.photos/seed/${post.userId}/100/100`} className="w-12 h-12 rounded-2xl object-cover" referrerPolicy="no-referrer" />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <h4 className="font-bold text-slate-900">{post.authorName}</h4>
-                        {post.isVerified && <BadgeCheck className="w-4 h-4 text-blue-500 fill-blue-500" />}
-                      </div>
+                  <Link to={`/profile/${post.userId}`} className="flex gap-3">
+                    <img src={post.authorPhoto || `https://picsum.photos/seed/${post.userId}/100/100`} className="w-12 h-12 rounded-2xl object-cover" referrerPolicy="no-referrer" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <h4 className="font-bold text-slate-900 hover:text-[#ff3366] transition-colors">{post.authorName}</h4>
+                          {post.isVerified && <BadgeCheck className="w-4 h-4 text-blue-500 fill-blue-500" />}
+                        </div>
                       {profile?.uid !== post.userId && (
                         <button 
                           onClick={() => handleFollow(post.userId)}
@@ -325,7 +416,7 @@ const Feed: React.FC = () => {
                       {formatDistanceToNow(new Date(post.createdAt))} ago
                     </p>
                   </div>
-                </div>
+                </Link>
                 <div className="flex items-center gap-2">
                   <button onClick={() => handleReport(post.id, 'post')} className="text-slate-300 hover:text-red-500 transition-colors">
                     <Flag className="w-4 h-4" />
@@ -477,9 +568,126 @@ const Feed: React.FC = () => {
               </span>
             </div>
           </div>
-          <button className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all">
+          <button 
+            onClick={() => navigate('/wallet')}
+            className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all"
+          >
             Redeem Points
           </button>
+        </div>
+
+        {/* Matches */}
+        {matches.length > 0 && (
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+            <h3 className="text-xs font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
+              <Heart className="w-4 h-4 fill-current" />
+              Your Matches
+            </h3>
+            <div className="space-y-4">
+              {matches.map(user => (
+                <div key={user.uid} className="flex items-center justify-between">
+                  <Link to={`/profile/${user.uid}`} className="flex items-center gap-3">
+                    <img src={user.photos?.[0] || `https://picsum.photos/seed/${user.uid}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 truncate w-24">{user.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">{user.city}, {user.country}</p>
+                    </div>
+                  </Link>
+                  <button 
+                    onClick={() => handleFollow(user.uid)}
+                    className="p-2 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Suggested Friends */}
+        {suggestedUsers.length > 0 && (
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Suggested Friends</h3>
+            <div className="space-y-4">
+              {suggestedUsers.map(user => (
+                <div key={user.uid} className="flex items-center justify-between">
+                  <Link to={`/profile/${user.uid}`} className="flex items-center gap-3">
+                    <img src={user.photos?.[0] || `https://picsum.photos/seed/${user.uid}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 truncate w-24">{user.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">{user.level}</p>
+                    </div>
+                  </Link>
+                  <button 
+                    onClick={() => handleFollow(user.uid)}
+                    className="p-2 bg-slate-50 text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Suggested Pages */}
+        {suggestedPages.length > 0 && (
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Suggested Pages</h3>
+            <div className="space-y-4">
+              {suggestedPages.map(page => (
+                <div key={page.id} className="flex items-center justify-between">
+                  <Link to={`/pages/${page.id}`} className="flex items-center gap-3">
+                    <img src={page.avatarUrl || `https://picsum.photos/seed/${page.id}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 truncate w-24">{page.title}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">{page.category}</p>
+                    </div>
+                  </Link>
+                  <button className="p-2 bg-slate-50 text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all">
+                    <Heart className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Suggested Groups */}
+        {suggestedGroups.length > 0 && (
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Suggested Groups</h3>
+            <div className="space-y-4">
+              {suggestedGroups.map(group => (
+                <div key={group.id} className="flex items-center justify-between">
+                  <Link to={`/groups/${group.id}`} className="flex items-center gap-3">
+                    <img src={group.coverPhoto || `https://picsum.photos/seed/${group.id}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 truncate w-24">{group.title}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">{group.privacy}</p>
+                    </div>
+                  </Link>
+                  <button className="p-2 bg-slate-50 text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all">
+                    <Users className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Trending Hashtags */}
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Trending Now</h3>
+          <div className="space-y-4">
+            {trendingHashtags.map(item => (
+              <div key={item.tag} className="group cursor-pointer">
+                <p className="text-sm font-bold text-slate-900 group-hover:text-[#ff3366] transition-colors">#{item.tag}</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">{item.count} posts</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Ad Section */}

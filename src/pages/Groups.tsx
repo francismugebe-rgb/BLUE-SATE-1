@@ -3,6 +3,7 @@ import { collection, query, where, orderBy, onSnapshot, addDoc, doc, updateDoc, 
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Group } from '../types';
+import { Link } from 'react-router-dom';
 import { Users, Plus, Search, MoreHorizontal, Lock, Globe, Shield, MessageSquare } from 'lucide-react';
 import { cn, formatTime } from '../lib/utils';
 
@@ -54,6 +55,23 @@ const Groups: React.FC = () => {
 
     try {
       await updateDoc(doc(db, 'groups', groupId), { members: newMembers });
+      
+      if (!isMember) {
+        // Notify owner
+        const group = groups.find(g => g.id === groupId);
+        if (group && group.ownerId !== authUser.uid) {
+          await addDoc(collection(db, 'notifications'), {
+            receiverId: group.ownerId,
+            senderId: authUser.uid,
+            senderName: profile?.name || 'Someone',
+            type: 'group_join',
+            targetId: groupId,
+            targetName: group.title,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'groups');
     }
@@ -93,13 +111,13 @@ const Groups: React.FC = () => {
       <div className="grid md:grid-cols-2 gap-6">
         {groups.map(group => (
           <div key={group.id} className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-6 flex gap-6 hover:shadow-md transition-all group">
-            <div className="w-24 h-24 bg-slate-100 rounded-3xl overflow-hidden flex-shrink-0">
-              <img src={`https://picsum.photos/seed/${group.id}/200/200`} className="w-full h-full object-cover" />
-            </div>
+            <Link to={`/groups/${group.id}`} className="w-24 h-24 bg-slate-100 rounded-3xl overflow-hidden flex-shrink-0 block">
+              <img src={group.coverPhoto || `https://picsum.photos/seed/${group.id}/200/200`} className="w-full h-full object-cover" />
+            </Link>
             <div className="flex-1 flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-black text-slate-900 text-lg">{group.title}</h3>
+                  <Link to={`/groups/${group.id}`} className="font-black text-slate-900 text-lg hover:text-[#ff3366] transition-colors">{group.title}</Link>
                   <div className="flex items-center gap-1 text-slate-400">
                     {group.privacy === 'public' ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                     <span className="text-[10px] font-black uppercase tracking-widest">{group.privacy}</span>

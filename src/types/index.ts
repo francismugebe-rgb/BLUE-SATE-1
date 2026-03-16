@@ -7,6 +7,7 @@ export interface UserProfile {
   interestedIn?: string;
   country?: string;
   city?: string;
+  nationality?: string;
   location?: string;
   bio?: string;
   interests?: string[];
@@ -64,6 +65,7 @@ export interface Page {
   category: string;
   isVerified: boolean;
   followers: string[];
+  likes: string[];
   avatarUrl?: string;
   coverUrl?: string;
   createdAt: string;
@@ -160,7 +162,7 @@ export interface Notification {
   receiverId: string;
   senderId: string;
   senderName: string;
-  type: 'match' | 'message' | 'like' | 'comment' | 'follow' | 'verification';
+  type: 'match' | 'message' | 'like' | 'comment' | 'follow' | 'verification' | 'page_follow' | 'group_join';
   relatedId?: string;
   read: boolean;
   createdAt: string;

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, addDoc, doc, updateDoc, getDocs, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Page } from '../types';
-import { Flag, Plus, Search, MoreHorizontal, BadgeCheck, Users, Globe, Lock, Shield } from 'lucide-react';
+import { Flag, Plus, Search, MoreHorizontal, BadgeCheck, Users, Globe, Lock, Shield, MessageSquare, Heart } from 'lucide-react';
 import { cn, formatTime } from '../lib/utils';
+import { Link } from 'react-router-dom';
 
 const Pages: React.FC = () => {
   const { profile, user: authUser } = useAuth();
@@ -32,6 +33,7 @@ const Pages: React.FC = () => {
       description: newPage.description,
       category: newPage.category,
       followers: [],
+      likes: [],
       isVerified: false,
       createdAt: new Date().toISOString()
     };
@@ -55,6 +57,53 @@ const Pages: React.FC = () => {
 
     try {
       await updateDoc(doc(db, 'pages', pageId), { followers: newFollowers });
+      
+      if (!isFollowing) {
+        // Notify owner
+        const page = pages.find(p => p.id === pageId);
+        if (page && page.ownerId !== authUser.uid) {
+          await addDoc(collection(db, 'notifications'), {
+            receiverId: page.ownerId,
+            senderId: authUser.uid,
+            senderName: profile?.name || 'Someone',
+            type: 'page_follow',
+            targetId: pageId,
+            targetName: page.title,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'pages');
+    }
+  };
+
+  const handleLikePage = async (pageId: string, likes: string[]) => {
+    if (!authUser) return;
+    const isLiked = likes?.includes(authUser.uid);
+    const newLikes = isLiked 
+      ? likes.filter(id => id !== authUser.uid)
+      : [...(likes || []), authUser.uid];
+
+    try {
+      await updateDoc(doc(db, 'pages', pageId), { likes: newLikes });
+      
+      if (!isLiked) {
+        const page = pages.find(p => p.id === pageId);
+        if (page && page.ownerId !== authUser.uid) {
+          await addDoc(collection(db, 'notifications'), {
+            receiverId: page.ownerId,
+            senderId: authUser.uid,
+            senderName: profile?.name || 'Someone',
+            type: 'like',
+            targetId: pageId,
+            targetName: page.title,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'pages');
     }
@@ -94,18 +143,18 @@ const Pages: React.FC = () => {
       <div className="grid md:grid-cols-3 gap-6">
         {pages.map(page => (
           <div key={page.id} className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden group hover:shadow-md transition-all">
-            <div className="h-32 bg-gradient-to-br from-slate-100 to-slate-200 relative">
+            <Link to={`/pages/${page.id}`} className="block h-32 bg-gradient-to-br from-slate-100 to-slate-200 relative">
               {page.coverUrl && <img src={page.coverUrl} className="w-full h-full object-cover" />}
               <div className="absolute -bottom-6 left-6">
                 <div className="w-16 h-16 bg-white rounded-2xl p-1 shadow-md">
                   <img src={page.avatarUrl || `https://picsum.photos/seed/${page.id}/100/100`} className="w-full h-full rounded-xl object-cover" />
                 </div>
               </div>
-            </div>
+            </Link>
             <div className="p-6 pt-10">
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-1">
-                  <h3 className="font-black text-slate-900 truncate max-w-[150px]">{page.title}</h3>
+                  <Link to={`/pages/${page.id}`} className="font-black text-slate-900 truncate max-w-[150px] hover:text-[#ff3366] transition-colors">{page.title}</Link>
                   {page.isVerified && <BadgeCheck className="w-4 h-4 text-blue-500 fill-blue-500" />}
                 </div>
                 <button className="text-slate-400 hover:text-slate-600">
@@ -115,22 +164,49 @@ const Pages: React.FC = () => {
               <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4">{page.category}</p>
               <p className="text-sm text-slate-600 line-clamp-2 mb-6 min-h-[40px]">{page.description || 'No description provided.'}</p>
               
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2 text-slate-400">
                   <Users className="w-4 h-4" />
                   <span className="text-xs font-bold">{page.followers.length} followers</span>
                 </div>
-                <button 
-                  onClick={() => handleFollowPage(page.id, page.followers)}
-                  className={cn(
-                    "px-6 py-2 rounded-xl font-black text-sm transition-all",
-                    page.followers.includes(authUser?.uid || '') 
-                      ? "bg-slate-100 text-slate-600 hover:bg-slate-200" 
-                      : "bg-[#ff3366] text-white hover:bg-[#ff1a53] shadow-md shadow-[#ff3366]/10"
-                  )}
-                >
-                  {page.followers.includes(authUser?.uid || '') ? 'Following' : 'Follow'}
-                </button>
+                <div className="flex items-center gap-2 text-slate-400">
+                  <Heart className="w-4 h-4" />
+                  <span className="text-xs font-bold">{page.likes?.length || 0} likes</span>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => handleLikePage(page.id, page.likes || [])}
+                    className={cn(
+                      "p-2 rounded-xl transition-all",
+                      page.likes?.includes(authUser?.uid || '') 
+                        ? "text-rose-500 bg-rose-50" 
+                        : "text-slate-400 bg-slate-50 hover:text-rose-500"
+                    )}
+                  >
+                    <Heart className={cn("w-5 h-5", page.likes?.includes(authUser?.uid || '') && "fill-current")} />
+                  </button>
+                  <button 
+                    onClick={() => handleFollowPage(page.id, page.followers)}
+                    className={cn(
+                      "px-4 py-2 rounded-xl font-black text-sm transition-all",
+                      page.followers.includes(authUser?.uid || '') 
+                        ? "bg-slate-100 text-slate-600 hover:bg-slate-200" 
+                        : "bg-[#ff3366] text-white hover:bg-[#ff1a53] shadow-md shadow-[#ff3366]/10"
+                    )}
+                  >
+                    {page.followers.includes(authUser?.uid || '') ? 'Following' : 'Follow'}
+                  </button>
+                  <Link 
+                    to={`/messages?pageId=${page.id}`}
+                    className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all"
+                    title="Message Page"
+                  >
+                    <MessageSquare className="w-5 h-5" />
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

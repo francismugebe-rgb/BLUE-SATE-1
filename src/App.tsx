@@ -13,7 +13,9 @@ import Matches from './pages/Matches';
 import Messages from './pages/Messages';
 import Wallet from './pages/Wallet';
 import Pages from './pages/Pages';
+import PageDetails from './pages/PageDetails';
 import Groups from './pages/Groups';
+import GroupDetails from './pages/GroupDetails';
 import AdminDashboard from './pages/AdminDashboard';
 import Settings from './pages/Settings';
 import Reels from './pages/Reels';
@@ -50,7 +52,9 @@ function App() {
             <Route path="/messages" element={<Messages />} />
             <Route path="/wallet" element={<Wallet />} />
             <Route path="/pages" element={<Pages />} />
+            <Route path="/pages/:id" element={<PageDetails />} />
             <Route path="/groups" element={<Groups />} />
+            <Route path="/groups/:id" element={<GroupDetails />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:id" element={<Chat />} />
             <Route path="/matches" element={<Matches />} />

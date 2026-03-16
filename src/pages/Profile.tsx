@@ -237,15 +237,17 @@ const Profile: React.FC = () => {
       const q = query(
         collection(db, 'users'),
         where('gender', '==', profile.interestedIn || (profile.gender === 'Male' ? 'Female' : 'Male')),
-        limit(10)
+        limit(50)
       );
       const snap = await getDocs(q);
       const matches = snap.docs
         .map(d => d.data() as UserProfile)
-        .filter(u => u.uid !== profile.uid);
-      setMatchingUsers(matches);
-      setActiveTab('friends'); // Show matches in friends tab area or similar
-      alert(`Found ${matches.length} potential matches!`);
+        .filter(u => u.uid !== profile.uid)
+        .filter(u => u.name && u.photos?.length && u.bio && u.city && u.country); // Profile completeness check
+      
+      setMatchingUsers(matches.slice(0, 10));
+      setActiveTab('friends'); 
+      alert(`Found ${matches.length} potential matches with complete profiles!`);
     } catch (err) {
       console.error(err);
     } finally {
@@ -418,6 +420,10 @@ const Profile: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-3 text-slate-600">
                   <Globe className="w-5 h-5 text-slate-400" />
+                  <span className="text-sm">Nationality: <span className="font-bold text-slate-900">{targetProfile.nationality || 'Not specified'}</span></span>
+                </div>
+                <div className="flex items-center gap-3 text-slate-600">
+                  <Globe className="w-5 h-5 text-slate-400" />
                   <span className="text-sm">From <span className="font-bold text-slate-900">{targetProfile.country || 'Unknown'}</span></span>
                 </div>
                 <div className="flex items-center gap-3 text-slate-600">
@@ -441,27 +447,30 @@ const Profile: React.FC = () => {
               {isEditing && (
                 <div className="pt-4 border-t border-slate-100 space-y-4">
                   <div className="grid grid-cols-2 gap-2">
+                    <input type="text" placeholder="Nationality" value={editedData.nationality || ''} onChange={e => setEditedData({...editedData, nationality: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
                     <select value={editedData.country || ''} onChange={e => setEditedData({...editedData, country: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border">
                       <option value="">Select Country</option>
                       {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
-                    <input type="text" placeholder="City" value={editedData.city || ''} onChange={e => setEditedData({...editedData, city: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
+                    <input type="text" placeholder="City" value={editedData.city || ''} onChange={e => setEditedData({...editedData, city: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
                     <select value={editedData.gender || ''} onChange={e => setEditedData({...editedData, gender: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border">
                       <option value="">Gender</option>
                       {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <select value={editedData.interestedIn || ''} onChange={e => setEditedData({...editedData, interestedIn: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border">
                       <option value="">Interested In</option>
                       {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="Occupation" value={editedData.occupation || ''} onChange={e => setEditedData({...editedData, occupation: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
                     <select value={editedData.relationshipStatus || ''} onChange={e => setEditedData({...editedData, relationshipStatus: e.target.value})} className="w-full bg-slate-50 p-2 rounded-lg text-xs border">
                       {RELATIONSHIP_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <input type="text" placeholder="Occupation" value={editedData.occupation || ''} onChange={e => setEditedData({...editedData, occupation: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
                   </div>
                 </div>
               )}

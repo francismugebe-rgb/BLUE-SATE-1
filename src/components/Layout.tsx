@@ -41,12 +41,12 @@ const Layout: React.FC<LayoutProps> = ({ admin }) => {
     <div className="min-h-screen bg-[#f5f6fa] flex flex-col">
       {/* Top Header Menu */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <div className="w-10 h-10 bg-[#ff3366] rounded-xl flex items-center justify-center shadow-lg shadow-[#ff3366]/20">
             <Heart className="text-white w-6 h-6 fill-current" />
           </div>
           <span className="text-xl font-black text-slate-900 tracking-tighter uppercase">HEART CONNECT</span>
-        </div>
+        </Link>
 
         <nav className="hidden md:flex items-center gap-2 bg-slate-100 p-1 rounded-2xl">
           {topMenuBranches.map((branch) => (
