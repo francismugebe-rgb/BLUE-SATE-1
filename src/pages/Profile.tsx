@@ -410,31 +410,31 @@ const Profile: React.FC = () => {
                       }}
                       disabled={isUploadingPhoto}
                       className={cn(
-                        "px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg",
+                        "px-3 py-2 md:px-6 md:py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg text-xs md:text-base",
                         isEditing ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-[var(--bg-card)] text-[var(--text-primary)] hover:bg-[var(--bg-input)] border border-[var(--border-color)]"
                       )}
                     >
-                      {isEditing ? <Check className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />}
-                      <span>{isEditing ? 'Save Changes' : 'Edit Profile'}</span>
+                      {isEditing ? <Check className="w-4 h-4 md:w-5 md:h-5" /> : <Edit3 className="w-4 h-4 md:w-5 md:h-5" />}
+                      <span>{isEditing ? 'Save' : 'Edit Profile'}</span>
                     </button>
                     
                     {isOwnProfile && !profile?.isPremium && (
-                      <button onClick={handleUpgradeProfile} className="bg-amber-500 text-white px-6 py-3 rounded-2xl font-bold hover:bg-amber-600 transition-all flex items-center gap-2 shadow-lg">
-                        <Zap className="w-5 h-5" />
+                      <button onClick={handleUpgradeProfile} className="bg-amber-500 text-white px-3 py-2 md:px-6 md:py-3 rounded-2xl font-bold hover:bg-amber-600 transition-all flex items-center gap-2 shadow-lg text-xs md:text-base">
+                        <Zap className="w-4 h-4 md:w-5 md:h-5" />
                         <span>Upgrade</span>
                       </button>
                     )}
                     
                     {isOwnProfile && !profile?.isVerified && !profile?.isVerifiedPending && (
-                      <button onClick={handleRequestVerification} className="bg-[#00a2ff] text-white px-6 py-3 rounded-2xl font-bold hover:bg-[#0088d6] transition-all flex items-center gap-2 shadow-lg">
-                        <ShieldCheck className="w-5 h-5" />
+                      <button onClick={handleRequestVerification} className="bg-[#00a2ff] text-white px-3 py-2 md:px-6 md:py-3 rounded-2xl font-bold hover:bg-[#0088d6] transition-all flex items-center gap-2 shadow-lg text-xs md:text-base">
+                        <ShieldCheck className="w-4 h-4 md:w-5 md:h-5" />
                         <span>Verify</span>
                       </button>
                     )}
                     
                     {isOwnProfile && (
-                      <button onClick={handleMatch} disabled={isMatching} className="bg-rose-500 text-white px-6 py-3 rounded-2xl font-bold hover:bg-rose-600 transition-all flex items-center gap-2 shadow-lg disabled:opacity-50">
-                        <Search className="w-5 h-5" />
+                      <button onClick={handleMatch} disabled={isMatching} className="bg-rose-500 text-white px-3 py-2 md:px-6 md:py-3 rounded-2xl font-bold hover:bg-rose-600 transition-all flex items-center gap-2 shadow-lg disabled:opacity-50 text-xs md:text-base">
+                        <Search className="w-4 h-4 md:w-5 md:h-5" />
                         <span>{isMatching ? 'Matching...' : 'Find Matches'}</span>
                       </button>
                     )}
@@ -445,20 +445,20 @@ const Profile: React.FC = () => {
                     <button 
                       onClick={handleFollow}
                       className={cn(
-                        "px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg",
+                        "px-3 py-2 md:px-6 md:py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg text-xs md:text-base",
                         profile?.following?.includes(targetProfile.uid) 
                           ? "bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border-color)]" 
                           : "bg-[#1877f2] text-white hover:bg-[#166fe5]"
                       )}
                     >
-                      {profile?.following?.includes(targetProfile.uid) ? <UserMinus className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                      {profile?.following?.includes(targetProfile.uid) ? <UserMinus className="w-4 h-4 md:w-5 md:h-5" /> : <UserPlus className="w-4 h-4 md:w-5 md:h-5" />}
                       <span>{profile?.following?.includes(targetProfile.uid) ? 'Unfollow' : 'Follow'}</span>
                     </button>
                     <button 
                       onClick={() => openChat(targetProfile)}
-                      className="bg-[#ff3366] text-white px-6 py-3 rounded-2xl font-bold hover:bg-[#e62e5c] transition-all flex items-center gap-2 shadow-lg shadow-[#ff3366]/20"
+                      className="bg-[#ff3366] text-white px-3 py-2 md:px-6 md:py-3 rounded-2xl font-bold hover:bg-[#e62e5c] transition-all flex items-center gap-2 shadow-lg shadow-[#ff3366]/20 text-xs md:text-base"
                     >
-                      <MessageCircle className="w-5 h-5" />
+                      <MessageCircle className="w-4 h-4 md:w-5 md:h-5" />
                       <span>Message</span>
                     </button>
                   </>
