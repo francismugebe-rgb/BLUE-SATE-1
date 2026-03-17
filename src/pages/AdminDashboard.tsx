@@ -4,7 +4,7 @@ import { UserProfile, Post, Report, Advert } from '../types';
 import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck, BadgeCheck, Star, Trophy, Edit3, Heart, MessageCircle, Settings, Megaphone, Code, Flag, Check, X, DollarSign, Eye, MousePointer2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
-import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc, onSnapshot, setDoc, where, increment } from 'firebase/firestore';
+import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc, onSnapshot, setDoc, where, increment, getDoc } from 'firebase/firestore';
 import { createTransaction } from '../services/pointService';
 import { TransactionType } from '../types';
 
@@ -22,14 +22,17 @@ const AdminDashboard: React.FC = () => {
   });
 
   useEffect(() => {
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'site'), (snap) => {
-      if (snap.exists()) {
-        setSiteSettings(snap.data() as any);
+    const fetchSettings = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'settings', 'site'));
+        if (snap.exists()) {
+          setSiteSettings(snap.data() as any);
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, 'settings/site');
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'settings/site');
-    });
-    return () => unsubSettings();
+    };
+    fetchSettings();
   }, []);
 
   const handleSaveSettings = async () => {

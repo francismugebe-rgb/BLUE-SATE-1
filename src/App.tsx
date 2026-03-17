@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ChatProvider } from './context/ChatContext';
+import ChatOverlay from './components/ChatOverlay';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -35,9 +37,10 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
-function App() {
+const AppContent: React.FC = () => {
+  const { profile } = useAuth();
   return (
-    <AuthProvider>
+    <ChatProvider currentUserId={profile?.uid}>
       <Router>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -67,7 +70,16 @@ function App() {
             <Route index element={<AdminDashboard />} />
           </Route>
         </Routes>
+        <ChatOverlay />
       </Router>
+    </ChatProvider>
+  );
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
     </AuthProvider>
   );
 }

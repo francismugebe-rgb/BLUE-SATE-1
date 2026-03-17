@@ -4,7 +4,8 @@ import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, query, where, g
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile, Post, Reel } from '../types';
-import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search } from 'lucide-react';
+import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand } from 'lucide-react';
+import { useChat } from '../context/ChatContext';
 import { INTERESTS_LIST, RELATIONSHIP_STATUS_LIST, COUNTRIES, GENDERS } from '../constants';
 import { cn, fileToBase64, validateFile } from '../lib/utils';
 import { createTransaction } from '../services/pointService';
@@ -13,6 +14,7 @@ import { TransactionType } from '../types';
 const Profile: React.FC = () => {
   const { id } = useParams();
   const { profile, user: authUser, isAdmin } = useAuth();
+  const { openChat } = useChat();
   const [targetProfile, setTargetProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -234,13 +236,42 @@ const Profile: React.FC = () => {
     }
   };
 
+  const handleWave = async () => {
+    if (!profile || !targetProfile) return;
+    try {
+      const chatId = [profile.uid, targetProfile.uid].sort().join('_');
+      await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        chatId,
+        senderId: profile.uid,
+        receiverId: targetProfile.uid,
+        text: '👋 Waved at you!',
+        read: false,
+        createdAt: new Date().toISOString()
+      });
+      openChat(targetProfile);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'wave');
+    }
+  };
   const handleMatch = async () => {
     if (!profile) return;
     setIsMatching(true);
     try {
+      // Strict Male/Female matching
+      let targetGender = '';
+      if (profile.gender === 'Male') {
+        targetGender = 'Female';
+      } else if (profile.gender === 'Female') {
+        targetGender = 'Male';
+      } else {
+        alert("Matching is currently optimized for Male and Female users. Please update your gender in settings.");
+        setIsMatching(false);
+        return;
+      }
+
       const q = query(
         collection(db, 'users'),
-        where('gender', '==', profile.interestedIn || (profile.gender === 'Male' ? 'Female' : 'Male')),
+        where('gender', '==', targetGender),
         limit(50)
       );
       const snap = await getDocs(q);
@@ -249,11 +280,17 @@ const Profile: React.FC = () => {
         .filter(u => u.uid !== profile.uid)
         .filter(u => u.name && u.photos?.length && u.bio && u.city && u.country); // Profile completeness check
       
-      setMatchingUsers(matches.slice(0, 10));
-      setActiveTab('friends'); 
-      alert(`Found ${matches.length} potential matches with complete profiles!`);
+      if (matches.length === 0) {
+        alert("No match available at the moment. Please try again later!");
+        setMatchingUsers([]);
+      } else {
+        setMatchingUsers(matches.slice(0, 10));
+        setActiveTab('friends'); 
+        alert(`Found ${matches.length} potential matches with complete profiles!`);
+      }
     } catch (err) {
       console.error(err);
+      alert("An error occurred while searching for matches.");
     } finally {
       setIsMatching(false);
     }
@@ -370,9 +407,19 @@ const Profile: React.FC = () => {
                     {profile?.following?.includes(targetProfile.uid) ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
                     <span>{profile?.following?.includes(targetProfile.uid) ? 'Unfollow' : 'Follow'}</span>
                   </button>
-                  <button className="bg-slate-100 text-slate-900 px-4 py-2 rounded-lg font-bold hover:bg-slate-200 transition-all flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-[#ff3366]" />
-                    <span>Like</span>
+                  <button 
+                    onClick={() => openChat(targetProfile)}
+                    className="bg-[#ff3366] text-white px-4 py-2 rounded-lg font-bold hover:bg-[#e62e5c] transition-all flex items-center gap-2 shadow-sm shadow-[#ff3366]/20"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Message</span>
+                  </button>
+                  <button 
+                    onClick={handleWave}
+                    className="bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
+                  >
+                    <Hand className="w-4 h-4 text-amber-500" />
+                    <span>Wave</span>
                   </button>
                 </>
               )}

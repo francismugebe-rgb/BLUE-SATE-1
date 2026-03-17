@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, User, Compass, LayoutGrid, Settings, LogOut, ShieldCheck, PlayCircle, ShoppingBag, Wallet, Flag, Users } from 'lucide-react';
+import { Heart, MessageCircle, User, Compass, LayoutGrid, Settings, LogOut, ShieldCheck, PlayCircle, ShoppingBag, Wallet, Flag, Users, ChevronDown, BadgeCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../firebase';
 import { cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface LayoutProps {
   admin?: boolean;
@@ -13,6 +14,18 @@ const Layout: React.FC<LayoutProps> = ({ admin }) => {
   const { profile, isAdmin } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = async () => {
     await auth.signOut();
@@ -65,19 +78,108 @@ const Layout: React.FC<LayoutProps> = ({ admin }) => {
           ))}
         </nav>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 relative" ref={dropdownRef}>
           {profile && (
-            <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-100">
-              <div className="text-right hidden sm:block">
-                <p className="text-xs font-bold text-slate-900">{profile.name}</p>
-                <p className="text-[10px] font-bold text-[#ff3366] uppercase tracking-wider">{profile.level} • {profile.points} pts</p>
-              </div>
-              <img 
-                src={profile.photos?.[0] || `https://picsum.photos/seed/${profile.uid}/100/100`} 
-                className="w-8 h-8 rounded-xl object-cover border-2 border-white shadow-sm"
-                referrerPolicy="no-referrer"
-              />
-            </div>
+            <>
+              <button 
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-all group"
+              >
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs font-bold text-slate-900">{profile.name}</p>
+                  <p className="text-[10px] font-bold text-[#ff3366] uppercase tracking-wider">{profile.level} • {profile.points} pts</p>
+                </div>
+                <div className="relative">
+                  <img 
+                    src={profile.photos?.[0] || `https://picsum.photos/seed/${profile.uid}/100/100`} 
+                    className="w-8 h-8 rounded-xl object-cover border-2 border-white shadow-sm"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm border border-slate-100">
+                    <ChevronDown className={cn("w-2.5 h-2.5 text-slate-400 transition-transform", isProfileOpen && "rotate-180")} />
+                  </div>
+                </div>
+              </button>
+
+              <AnimatePresence>
+                {isProfileOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                    className="absolute top-full right-0 mt-2 w-72 bg-white rounded-[2rem] shadow-2xl border border-slate-100 p-4 z-[60]"
+                  >
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl mb-4">
+                      <img 
+                        src={profile.photos?.[0] || `https://picsum.photos/seed/${profile.uid}/100/100`} 
+                        className="w-12 h-12 rounded-xl object-cover border-2 border-white shadow-sm"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div>
+                        <div className="flex items-center gap-1">
+                          <p className="font-bold text-slate-900">{profile.name}</p>
+                          {profile.isVerified && <BadgeCheck className="w-3.5 h-3.5 text-blue-500 fill-blue-500" />}
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{profile.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Link 
+                        to="/profile" 
+                        onClick={() => setIsProfileOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 transition-all font-bold text-sm group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                          <User className="w-4 h-4 text-blue-500" />
+                        </div>
+                        <span>See your profile</span>
+                      </Link>
+                      
+                      <Link 
+                        to="/settings" 
+                        onClick={() => setIsProfileOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 transition-all font-bold text-sm group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                          <Settings className="w-4 h-4 text-slate-500" />
+                        </div>
+                        <span>Settings & Privacy</span>
+                      </Link>
+
+                      {isAdmin && (
+                        <Link 
+                          to="/admin" 
+                          onClick={() => setIsProfileOpen(false)}
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 transition-all font-bold text-sm group"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center group-hover:bg-purple-100 transition-colors">
+                            <ShieldCheck className="w-4 h-4 text-purple-500" />
+                          </div>
+                          <span>Admin Dashboard</span>
+                        </Link>
+                      )}
+
+                      <div className="h-px bg-slate-100 my-2 mx-2" />
+
+                      <button 
+                        onClick={() => {
+                          setIsProfileOpen(false);
+                          handleLogout();
+                        }}
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 transition-all font-bold text-sm group w-full text-left"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center group-hover:bg-red-100 transition-colors">
+                          <LogOut className="w-4 h-4 text-red-500" />
+                        </div>
+                        <span>Log Out</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </>
           )}
         </div>
       </header>

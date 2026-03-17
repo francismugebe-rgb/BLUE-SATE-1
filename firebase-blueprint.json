@@ -247,6 +247,10 @@
     "transactions": {
       "schema": "Transaction",
       "description": "Wallet transactions"
+    },
+    "settings": {
+      "schema": "object",
+      "description": "Site settings"
     }
   }
 }

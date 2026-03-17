@@ -42,8 +42,16 @@ async function startServer() {
   app.use(express.json());
 
   // Socket.io logic
+  const userSockets = new Map<string, string>(); // userId -> socketId
+
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
+
+    socket.on("user_online", (userId) => {
+      userSockets.set(userId, socket.id);
+      socket.data.userId = userId;
+      io.emit("user_status_change", { userId, status: "online" });
+    });
 
     socket.on("join_chat", (chatId) => {
       socket.join(chatId);
@@ -53,10 +61,14 @@ async function startServer() {
     socket.on("send_message", (data) => {
       // data: { chatId, senderId, receiverId, text, createdAt }
       io.to(data.chatId).emit("receive_message", data);
+      
+      // Send notification to receiver if not in chat
       io.emit("notification", {
         receiverId: data.receiverId,
         type: "message",
         senderId: data.senderId,
+        chatId: data.chatId,
+        text: data.text
       });
     });
 
@@ -64,7 +76,20 @@ async function startServer() {
       socket.to(data.chatId).emit("user_typing", data);
     });
 
+    socket.on("recording_audio", (data) => {
+      socket.to(data.chatId).emit("user_recording", data);
+    });
+
+    socket.on("message_seen", (data) => {
+      socket.to(data.chatId).emit("message_status_update", { ...data, status: 'seen' });
+    });
+
     socket.on("disconnect", () => {
+      const userId = socket.data.userId;
+      if (userId) {
+        userSockets.delete(userId);
+        io.emit("user_status_change", { userId, status: "offline", lastSeen: new Date().toISOString() });
+      }
       console.log("User disconnected");
     });
   });

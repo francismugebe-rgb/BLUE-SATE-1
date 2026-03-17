@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Reel } from '../types';
-import { Play, Heart, MessageCircle, Share2, Plus, X, Eye } from 'lucide-react';
+import { Play, Heart, MessageCircle, Share2, Plus, X, Eye, Upload, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -11,8 +12,11 @@ const Reels: React.FC = () => {
   const { profile } = useAuth();
   const [reels, setReels] = useState<Reel[]>([]);
   const [isAdding, setIsAdding] = useState(false);
-  const [videoUrl, setVideoUrl] = useState('');
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [caption, setCaption] = useState('');
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'reels'), orderBy('createdAt', 'desc'));
@@ -24,28 +28,62 @@ const Reels: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.type.startsWith('video/')) {
+        setVideoFile(file);
+      } else {
+        alert('Please select a valid video file.');
+        e.target.value = '';
+      }
+    }
+  };
+
   const handleAddReel = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile || !videoUrl.trim()) return;
+    if (!profile || !videoFile) return;
 
-    try {
-      await addDoc(collection(db, 'reels'), {
-        userId: profile.uid,
-        authorName: profile.name,
-        authorPhoto: profile.photos?.[0] || '',
-        videoUrl,
-        caption,
-        likes: [],
-        comments: [],
-        views: 0,
-        createdAt: new Date().toISOString()
-      });
-      setIsAdding(false);
-      setVideoUrl('');
-      setCaption('');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'reels');
-    }
+    setIsUploading(true);
+    const storageRef = ref(storage, `reels/${profile.uid}/${Date.now()}_${videoFile.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, videoFile);
+
+    uploadTask.on('state_changed', 
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      }, 
+      (error) => {
+        console.error("Upload error:", error);
+        alert("Failed to upload video. Please try again.");
+        setIsUploading(false);
+        setUploadProgress(null);
+      }, 
+      async () => {
+        try {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          await addDoc(collection(db, 'reels'), {
+            userId: profile.uid,
+            authorName: profile.name,
+            authorPhoto: profile.photos?.[0] || '',
+            videoUrl: downloadURL,
+            caption,
+            likes: [],
+            comments: [],
+            views: 0,
+            createdAt: new Date().toISOString()
+          });
+          setIsAdding(false);
+          setVideoFile(null);
+          setCaption('');
+          setUploadProgress(null);
+          setIsUploading(false);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.CREATE, 'reels');
+          setIsUploading(false);
+        }
+      }
+    );
   };
 
   const handleLike = async (reel: Reel) => {
@@ -86,22 +124,72 @@ const Reels: React.FC = () => {
             <button onClick={() => setIsAdding(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
           </div>
           <form onSubmit={handleAddReel} className="space-y-4">
-            <input 
-              type="url" 
-              placeholder="Video URL (MP4, YouTube, etc.)"
-              value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10"
-              required
-            />
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className={cn(
+                "w-full aspect-video bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all group",
+                videoFile && "border-[#ff3366] bg-rose-50/30"
+              )}
+            >
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="video/*"
+                className="hidden"
+              />
+              {videoFile ? (
+                <div className="text-center p-4">
+                  <Play className="w-12 h-12 text-[#ff3366] mx-auto mb-2" />
+                  <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{videoFile.name}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                    {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <Upload className="w-6 h-6 text-slate-400 group-hover:text-[#ff3366]" />
+                  </div>
+                  <p className="text-sm font-bold text-slate-900">Choose a video</p>
+                  <p className="text-xs text-slate-400">MP4, MOV, or any video format</p>
+                </>
+              )}
+            </div>
+
+            {isUploading && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  <span>Uploading...</span>
+                  <span>{Math.round(uploadProgress || 0)}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-[#ff3366] transition-all duration-300" 
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <textarea 
               placeholder="Write a caption..."
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 h-24 resize-none"
             />
-            <button className="w-full bg-[#ff3366] text-white py-4 rounded-xl font-bold shadow-lg shadow-[#ff3366]/20">
-              Share Reel
+            <button 
+              disabled={!videoFile || isUploading}
+              className="w-full bg-[#ff3366] text-white py-4 rounded-xl font-bold shadow-lg shadow-[#ff3366]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Uploading...</span>
+                </>
+              ) : (
+                <span>Share Reel</span>
+              )}
             </button>
           </form>
         </div>

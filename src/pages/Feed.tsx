@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, where, increment, getDocs, limit as firestoreLimit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, where, increment, getDocs, getDoc, limit as firestoreLimit } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Post, UserProfile, Page, Group } from '../types';
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X, BadgeCheck, Video, Megaphone, Info, DollarSign, Flag, ExternalLink, Smile, Users, Plus } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X, BadgeCheck, Video, Megaphone, Info, DollarSign, Flag, ExternalLink, Smile, Users, Plus, MessageSquare } from 'lucide-react';
+import { useChat } from '../context/ChatContext';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { fileToBase64, validateFile } from '../lib/utils';
@@ -14,6 +15,7 @@ const EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
 const Feed: React.FC = () => {
   const { profile } = useAuth();
+  const { openChat } = useChat();
   const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<UserProfile[]>([]);
@@ -34,14 +36,17 @@ const Feed: React.FC = () => {
   });
 
   useEffect(() => {
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'site'), (snap) => {
-      if (snap.exists()) {
-        setSiteSettings(snap.data() as any);
+    const fetchSettings = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'settings', 'site'));
+        if (snap.exists()) {
+          setSiteSettings(snap.data() as any);
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, 'settings/site');
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'settings/site');
-    });
-    return () => unsubSettings();
+    };
+    fetchSettings();
   }, []);
 
   useEffect(() => {
@@ -488,6 +493,21 @@ const Feed: React.FC = () => {
                   <MessageCircle className="w-5 h-5" />
                   <span>{post.comments.length}</span>
                 </button>
+                {profile?.uid !== post.userId && (
+                  <button 
+                    onClick={async () => {
+                      const usersRef = collection(db, 'users');
+                      const q = query(usersRef, where('uid', '==', post.userId), firestoreLimit(1));
+                      const snap = await getDocs(q);
+                      if (!snap.empty) {
+                        openChat(snap.docs[0].data() as UserProfile);
+                      }
+                    }}
+                    className="flex items-center gap-2 text-slate-400 hover:text-[#1877f2] transition-colors font-bold text-sm"
+                  >
+                    <MessageSquare className="w-5 h-5" />
+                  </button>
+                )}
                 <button className="flex items-center gap-2 text-slate-400 hover:text-slate-600 transition-colors font-bold text-sm">
                   <Share2 className="w-5 h-5" />
                 </button>
@@ -595,12 +615,20 @@ const Feed: React.FC = () => {
                       <p className="text-[10px] text-slate-400 font-bold uppercase">{user.city}, {user.country}</p>
                     </div>
                   </Link>
-                  <button 
-                    onClick={() => handleFollow(user.uid)}
-                    className="p-2 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => handleFollow(user.uid)}
+                      className="p-2 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => openChat(user)}
+                      className="p-2 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -621,12 +649,20 @@ const Feed: React.FC = () => {
                       <p className="text-[10px] text-slate-400 font-bold uppercase">{user.level}</p>
                     </div>
                   </Link>
-                  <button 
-                    onClick={() => handleFollow(user.uid)}
-                    className="p-2 bg-slate-50 text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => handleFollow(user.uid)}
+                      className="p-2 bg-slate-50 text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => openChat(user)}
+                      className="p-2 bg-slate-50 text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
