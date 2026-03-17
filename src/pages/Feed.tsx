@@ -307,22 +307,22 @@ const Feed: React.FC = () => {
       <div className="space-y-8">
         {/* Announcement */}
         {siteSettings.announcement && (
-          <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
-            <Megaphone className="w-5 h-5 text-blue-600 mt-0.5" />
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30 p-4 rounded-2xl flex items-start gap-3 shadow-sm transition-colors duration-300">
+            <Megaphone className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
             <div>
-              <p className="text-sm font-bold text-blue-900">Announcement</p>
-              <p className="text-sm text-blue-700 leading-relaxed">{siteSettings.announcement}</p>
+              <p className="text-sm font-bold text-blue-900 dark:text-blue-100">Announcement</p>
+              <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">{siteSettings.announcement}</p>
             </div>
           </div>
         )}
 
         {/* Feed Tabs */}
-      <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl w-fit mx-auto">
+      <div className="flex gap-4 p-1 bg-[var(--bg-input)] rounded-2xl w-fit mx-auto transition-colors duration-300">
         <button 
           onClick={() => setFeedType('global')}
           className={cn(
             "px-6 py-2 rounded-xl font-bold text-sm transition-all",
-            feedType === 'global' ? "bg-white text-[#ff3366] shadow-sm" : "text-slate-500 hover:text-slate-700"
+            feedType === 'global' ? "bg-[var(--bg-card)] text-[#ff3366] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
           )}
         >
           Global
@@ -331,16 +331,16 @@ const Feed: React.FC = () => {
           onClick={() => setFeedType('following')}
           className={cn(
             "px-6 py-2 rounded-xl font-bold text-sm transition-all",
-            feedType === 'following' ? "bg-white text-[#ff3366] shadow-sm" : "text-slate-500 hover:text-slate-700"
+            feedType === 'following' ? "bg-[var(--bg-card)] text-[#ff3366] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
           )}
         >
           Following
         </button>
       </div>
       {/* Create Post */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
+      <div className="card">
         <div className="flex gap-4">
-          <img src={profile?.photos?.[0] || `https://picsum.photos/seed/${profile?.uid}/100/100`} className="w-12 h-12 rounded-2xl object-cover" referrerPolicy="no-referrer" />
+          <img src={profile?.photos?.[0] || `https://picsum.photos/seed/${profile?.uid}/100/100`} className="w-12 h-12 rounded-2xl object-cover border border-[var(--border-color)]" referrerPolicy="no-referrer" />
           <form onSubmit={handleCreatePost} className="flex-1 space-y-4">
             <textarea
               value={newPost}
@@ -352,7 +352,7 @@ const Feed: React.FC = () => {
                 }
               }}
               placeholder="What's on your mind?"
-              className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366] transition-all resize-none h-24"
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366] transition-all resize-none h-24 placeholder:text-[var(--text-secondary)]"
             />
             {postImage && (
               <div className="relative">
@@ -368,7 +368,7 @@ const Feed: React.FC = () => {
             )}
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 text-slate-500 hover:text-[#ff3366] transition-colors font-medium cursor-pointer">
+                <label className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[#ff3366] transition-colors font-medium cursor-pointer">
                   <ImageIcon className="w-5 h-5" />
                   <span>Photo</span>
                   <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
@@ -379,7 +379,7 @@ const Feed: React.FC = () => {
                     const url = prompt("Enter image URL:");
                     if (url) setPostImage(url);
                   }}
-                  className="text-xs text-slate-400 hover:text-slate-600"
+                  className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 >
                   URL
                 </button>
@@ -399,15 +399,15 @@ const Feed: React.FC = () => {
       {/* Posts List */}
       <div className="space-y-6">
         {posts.map((post) => (
-          <div key={post.id} className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+          <div key={post.id} className="bg-[var(--bg-card)] rounded-3xl shadow-sm border border-[var(--border-color)] overflow-hidden transition-colors duration-300">
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
                   <Link to={`/profile/${post.userId}`} className="flex gap-3">
-                    <img src={post.authorPhoto || `https://picsum.photos/seed/${post.userId}/100/100`} className="w-12 h-12 rounded-2xl object-cover" referrerPolicy="no-referrer" />
+                    <img src={post.authorPhoto || `https://picsum.photos/seed/${post.userId}/100/100`} className="w-12 h-12 rounded-2xl object-cover border border-[var(--border-color)]" referrerPolicy="no-referrer" />
                     <div>
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1">
-                          <h4 className="font-bold text-slate-900 hover:text-[#ff3366] transition-colors">{post.authorName}</h4>
+                          <h4 className="font-bold text-[var(--text-primary)] hover:text-[#ff3366] transition-colors">{post.authorName}</h4>
                           {post.isVerified && <BadgeCheck className="w-4 h-4 text-blue-500 fill-blue-500" />}
                         </div>
                       {profile?.uid !== post.userId && (
@@ -419,22 +419,22 @@ const Feed: React.FC = () => {
                         </button>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 font-medium">
+                    <p className="text-xs text-[var(--text-secondary)] font-medium">
                       {formatDistanceToNow(new Date(post.createdAt))} ago
                     </p>
                   </div>
                 </Link>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => handleReport(post.id, 'post')} className="text-slate-300 hover:text-red-500 transition-colors">
+                  <button onClick={() => handleReport(post.id, 'post')} className="text-[var(--text-secondary)] hover:text-red-500 transition-colors">
                     <Flag className="w-4 h-4" />
                   </button>
-                  <button className="text-slate-400 hover:text-slate-600">
+                  <button className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
                     <MoreHorizontal className="w-5 h-5" />
                   </button>
                 </div>
               </div>
               
-              <p className="text-slate-700 leading-relaxed mb-4 whitespace-pre-wrap">
+              <p className="text-[var(--text-primary)] leading-relaxed mb-4 whitespace-pre-wrap opacity-90">
                 {post.content}
               </p>
 
@@ -443,28 +443,28 @@ const Feed: React.FC = () => {
                   href={post.linkPreview.url} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="block p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-all mb-4"
+                  className="block p-4 bg-[var(--bg-input)] rounded-2xl border border-[var(--border-color)] hover:bg-[var(--bg-card)] transition-all mb-4"
                 >
                   <div className="flex items-center gap-2 text-[#ff3366] font-bold text-sm mb-1">
                     <ExternalLink className="w-4 h-4" />
                     <span>Link Preview</span>
                   </div>
-                  <p className="text-xs text-slate-500 truncate">{post.linkPreview.url}</p>
+                  <p className="text-xs text-[var(--text-secondary)] truncate">{post.linkPreview.url}</p>
                 </a>
               )}
               
               {post.image && (
-                <img src={post.image} className="w-full rounded-2xl mb-4 object-cover max-h-96" referrerPolicy="no-referrer" />
+                <img src={post.image} className="w-full rounded-2xl mb-4 object-cover max-h-96 border border-[var(--border-color)]" referrerPolicy="no-referrer" />
               )}
               
-              <div className="flex items-center gap-6 pt-4 border-t border-slate-50 relative">
+              <div className="flex items-center gap-6 pt-4 border-t border-[var(--border-color)] relative">
                 <div className="relative">
                   <button 
                     onMouseEnter={() => setShowEmojiPicker(post.id)}
                     onClick={() => handleLike(post.id)}
                     className={cn(
                       "flex items-center gap-2 transition-colors font-bold text-sm",
-                      post.likes.some(l => l.userId === profile?.uid) ? "text-[#ff3366]" : "text-slate-400 hover:text-[#ff3366]"
+                      post.likes.some(l => l.userId === profile?.uid) ? "text-[#ff3366]" : "text-[var(--text-secondary)] hover:text-[#ff3366]"
                     )}
                   >
                     <Heart className={cn("w-5 h-5", post.likes.some(l => l.userId === profile?.uid) && "fill-current")} />
@@ -473,7 +473,7 @@ const Feed: React.FC = () => {
                   
                   {showEmojiPicker === post.id && (
                     <div 
-                      className="absolute bottom-full left-0 mb-2 bg-white shadow-xl border border-slate-100 rounded-full p-2 flex gap-2 z-10 animate-in fade-in slide-in-from-bottom-2"
+                      className="absolute bottom-full left-0 mb-2 bg-[var(--bg-card)] shadow-xl border border-[var(--border-color)] rounded-full p-2 flex gap-2 z-10 animate-in fade-in slide-in-from-bottom-2"
                       onMouseLeave={() => setShowEmojiPicker(null)}
                     >
                       {EMOJIS.map(emoji => (
@@ -489,7 +489,7 @@ const Feed: React.FC = () => {
                   )}
                 </div>
 
-                <button className="flex items-center gap-2 text-slate-400 hover:text-[#6c5ce7] transition-colors font-bold text-sm">
+                <button className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[#6c5ce7] transition-colors font-bold text-sm">
                   <MessageCircle className="w-5 h-5" />
                   <span>{post.comments.length}</span>
                 </button>
@@ -503,12 +503,12 @@ const Feed: React.FC = () => {
                         openChat(snap.docs[0].data() as UserProfile);
                       }
                     }}
-                    className="flex items-center gap-2 text-slate-400 hover:text-[#1877f2] transition-colors font-bold text-sm"
+                    className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[#1877f2] transition-colors font-bold text-sm"
                   >
                     <MessageSquare className="w-5 h-5" />
                   </button>
                 )}
-                <button className="flex items-center gap-2 text-slate-400 hover:text-slate-600 transition-colors font-bold text-sm">
+                <button className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors font-bold text-sm">
                   <Share2 className="w-5 h-5" />
                 </button>
               </div>
@@ -521,7 +521,7 @@ const Feed: React.FC = () => {
                       <span key={i} className="text-xs">{emoji}</span>
                     ))}
                   </div>
-                  <span className="text-[10px] text-slate-400 font-bold">
+                  <span className="text-[10px] text-[var(--text-secondary)] font-bold">
                     {post.likes.length} reactions
                   </span>
                 </div>
@@ -531,16 +531,16 @@ const Feed: React.FC = () => {
               <div className="mt-6 space-y-4">
                 {post.comments.map((comment, idx) => (
                   <div key={idx} className="flex gap-3 text-sm">
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex-shrink-0" />
-                    <div className="bg-slate-50 rounded-2xl p-3 flex-1">
-                      <span className="font-bold text-slate-900 mr-2">{comment.userName}</span>
-                      <span className="text-slate-600">{comment.comment}</span>
+                    <div className="w-8 h-8 rounded-lg bg-[var(--bg-input)] flex-shrink-0" />
+                    <div className="bg-[var(--bg-input)] rounded-2xl p-3 flex-1">
+                      <span className="font-bold text-[var(--text-primary)] mr-2">{comment.userName}</span>
+                      <span className="text-[var(--text-secondary)]">{comment.comment}</span>
                     </div>
                   </div>
                 ))}
                 
                 <div className="flex gap-3 items-center pt-2">
-                  <img src={profile?.photos?.[0] || ''} className="w-8 h-8 rounded-lg object-cover" />
+                  <img src={profile?.photos?.[0] || ''} className="w-8 h-8 rounded-lg object-cover border border-[var(--border-color)]" />
                   <div className="flex-1 relative">
                     <input
                       type="text"
@@ -548,7 +548,7 @@ const Feed: React.FC = () => {
                       onChange={(e) => setCommentText(prev => ({ ...prev, [post.id]: e.target.value }))}
                       onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)}
                       placeholder="Write a comment..."
-                      className="w-full bg-slate-50 border border-slate-100 rounded-xl py-2 pl-4 pr-10 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366] text-sm"
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl py-2 pl-4 pr-10 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366] text-sm placeholder:text-[var(--text-secondary)]"
                     />
                     <button 
                       onClick={() => handleComment(post.id)}
@@ -567,24 +567,24 @@ const Feed: React.FC = () => {
     {/* Sidebar */}
       <div className="hidden lg:block space-y-6">
         {/* Points Info */}
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+        <div className="bg-[var(--bg-card)] p-6 rounded-[2rem] shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-yellow-50 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-yellow-600" />
             </div>
-            <h3 className="font-black text-slate-900">Your Earnings</h3>
+            <h3 className="font-black text-[var(--text-primary)]">Your Earnings</h3>
           </div>
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-slate-500 font-bold">Total Points</span>
-              <span className="text-lg font-black text-slate-900">{profile?.points || 0}</span>
+              <span className="text-sm text-[var(--text-secondary)] font-bold">Total Points</span>
+              <span className="text-lg font-black text-[var(--text-primary)]">{profile?.points || 0}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-slate-500 font-bold">Point Value</span>
+              <span className="text-sm text-[var(--text-secondary)] font-bold">Point Value</span>
               <span className="text-sm font-black text-emerald-600">${siteSettings.pointValue} / pt</span>
             </div>
-            <div className="pt-2 border-t border-slate-50 flex justify-between items-center">
-              <span className="text-sm text-slate-900 font-black">Est. Value</span>
+            <div className="pt-2 border-t border-[var(--border-color)] flex justify-between items-center">
+              <span className="text-sm text-[var(--text-primary)] font-black">Est. Value</span>
               <span className="text-xl font-black text-[#ff3366]">
                 ${((profile?.points || 0) * siteSettings.pointValue).toFixed(2)}
               </span>
@@ -592,7 +592,7 @@ const Feed: React.FC = () => {
           </div>
           <button 
             onClick={() => navigate('/wallet')}
-            className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all"
+            className="w-full bg-slate-900 dark:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm hover:bg-slate-800 dark:hover:bg-slate-600 transition-all"
           >
             Redeem Points
           </button>
@@ -600,7 +600,7 @@ const Feed: React.FC = () => {
 
         {/* Matches */}
         {matches.length > 0 && (
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+          <div className="bg-[var(--bg-card)] p-6 rounded-[2rem] shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
             <h3 className="text-xs font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
               <Heart className="w-4 h-4 fill-current" />
               Your Matches
@@ -609,22 +609,22 @@ const Feed: React.FC = () => {
               {matches.map(user => (
                 <div key={user.uid} className="flex items-center justify-between">
                   <Link to={`/profile/${user.uid}`} className="flex items-center gap-3">
-                    <img src={user.photos?.[0] || `https://picsum.photos/seed/${user.uid}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
+                    <img src={user.photos?.[0] || `https://picsum.photos/seed/${user.uid}/100/100`} className="w-10 h-10 rounded-xl object-cover border border-[var(--border-color)]" referrerPolicy="no-referrer" />
                     <div>
-                      <p className="text-sm font-bold text-slate-900 truncate w-24">{user.name}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">{user.city}, {user.country}</p>
+                      <p className="text-sm font-bold text-[var(--text-primary)] truncate w-24">{user.name}</p>
+                      <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">{user.city}, {user.country}</p>
                     </div>
                   </Link>
                   <div className="flex items-center gap-1">
                     <button 
                       onClick={() => handleFollow(user.uid)}
-                      className="p-2 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all"
+                      className="p-2 bg-rose-50 dark:bg-rose-900/20 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
                     <button 
                       onClick={() => openChat(user)}
-                      className="p-2 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all"
+                      className="p-2 bg-rose-50 dark:bg-rose-900/20 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all"
                     >
                       <MessageSquare className="w-4 h-4" />
                     </button>
@@ -637,28 +637,28 @@ const Feed: React.FC = () => {
 
         {/* Suggested Friends */}
         {suggestedUsers.length > 0 && (
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Suggested Friends</h3>
+          <div className="bg-[var(--bg-card)] p-6 rounded-[2rem] shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
+            <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Suggested Friends</h3>
             <div className="space-y-4">
               {suggestedUsers.map(user => (
                 <div key={user.uid} className="flex items-center justify-between">
                   <Link to={`/profile/${user.uid}`} className="flex items-center gap-3">
-                    <img src={user.photos?.[0] || `https://picsum.photos/seed/${user.uid}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
+                    <img src={user.photos?.[0] || `https://picsum.photos/seed/${user.uid}/100/100`} className="w-10 h-10 rounded-xl object-cover border border-[var(--border-color)]" referrerPolicy="no-referrer" />
                     <div>
-                      <p className="text-sm font-bold text-slate-900 truncate w-24">{user.name}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">{user.level}</p>
+                      <p className="text-sm font-bold text-[var(--text-primary)] truncate w-24">{user.name}</p>
+                      <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">{user.level}</p>
                     </div>
                   </Link>
                   <div className="flex items-center gap-1">
                     <button 
                       onClick={() => handleFollow(user.uid)}
-                      className="p-2 bg-slate-50 text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all"
+                      className="p-2 bg-[var(--bg-input)] text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
                     <button 
                       onClick={() => openChat(user)}
-                      className="p-2 bg-slate-50 text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all"
+                      className="p-2 bg-[var(--bg-input)] text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all"
                     >
                       <MessageSquare className="w-4 h-4" />
                     </button>
@@ -671,19 +671,19 @@ const Feed: React.FC = () => {
 
         {/* Suggested Pages */}
         {suggestedPages.length > 0 && (
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Suggested Pages</h3>
+          <div className="bg-[var(--bg-card)] p-6 rounded-[2rem] shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
+            <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Suggested Pages</h3>
             <div className="space-y-4">
               {suggestedPages.map(page => (
                 <div key={page.id} className="flex items-center justify-between">
                   <Link to={`/pages/${page.id}`} className="flex items-center gap-3">
-                    <img src={page.avatarUrl || `https://picsum.photos/seed/${page.id}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
+                    <img src={page.avatarUrl || `https://picsum.photos/seed/${page.id}/100/100`} className="w-10 h-10 rounded-xl object-cover border border-[var(--border-color)]" referrerPolicy="no-referrer" />
                     <div>
-                      <p className="text-sm font-bold text-slate-900 truncate w-24">{page.title}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">{page.category}</p>
+                      <p className="text-sm font-bold text-[var(--text-primary)] truncate w-24">{page.title}</p>
+                      <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">{page.category}</p>
                     </div>
                   </Link>
-                  <button className="p-2 bg-slate-50 text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all">
+                  <button className="p-2 bg-[var(--bg-input)] text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all">
                     <Heart className="w-4 h-4" />
                   </button>
                 </div>
@@ -694,19 +694,19 @@ const Feed: React.FC = () => {
 
         {/* Suggested Groups */}
         {suggestedGroups.length > 0 && (
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Suggested Groups</h3>
+          <div className="bg-[var(--bg-card)] p-6 rounded-[2rem] shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
+            <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Suggested Groups</h3>
             <div className="space-y-4">
               {suggestedGroups.map(group => (
                 <div key={group.id} className="flex items-center justify-between">
                   <Link to={`/groups/${group.id}`} className="flex items-center gap-3">
-                    <img src={group.coverPhoto || `https://picsum.photos/seed/${group.id}/100/100`} className="w-10 h-10 rounded-xl object-cover" referrerPolicy="no-referrer" />
+                    <img src={group.coverPhoto || `https://picsum.photos/seed/${group.id}/100/100`} className="w-10 h-10 rounded-xl object-cover border border-[var(--border-color)]" referrerPolicy="no-referrer" />
                     <div>
-                      <p className="text-sm font-bold text-slate-900 truncate w-24">{group.title}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">{group.privacy}</p>
+                      <p className="text-sm font-bold text-[var(--text-primary)] truncate w-24">{group.title}</p>
+                      <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">{group.privacy}</p>
                     </div>
                   </Link>
-                  <button className="p-2 bg-slate-50 text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all">
+                  <button className="p-2 bg-[var(--bg-input)] text-[#ff3366] rounded-xl hover:bg-[#ff3366] hover:text-white transition-all">
                     <Users className="w-4 h-4" />
                   </button>
                 </div>
@@ -716,13 +716,13 @@ const Feed: React.FC = () => {
         )}
 
         {/* Trending Hashtags */}
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Trending Now</h3>
+        <div className="bg-[var(--bg-card)] p-6 rounded-[2rem] shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
+          <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Trending Now</h3>
           <div className="space-y-4">
             {trendingHashtags.map(item => (
               <div key={item.tag} className="group cursor-pointer">
-                <p className="text-sm font-bold text-slate-900 group-hover:text-[#ff3366] transition-colors">#{item.tag}</p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase">{item.count} posts</p>
+                <p className="text-sm font-bold text-[var(--text-primary)] group-hover:text-[#ff3366] transition-colors">#{item.tag}</p>
+                <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">{item.count} posts</p>
               </div>
             ))}
           </div>
@@ -730,13 +730,13 @@ const Feed: React.FC = () => {
 
         {/* Ad Section */}
         {siteSettings.adHtml && (
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+          <div className="bg-[var(--bg-card)] p-6 rounded-[2rem] shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Sponsored</h3>
-              <Info className="w-3 h-3 text-slate-300" />
+              <h3 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest">Sponsored</h3>
+              <Info className="w-3 h-3 text-[var(--text-secondary)]" />
             </div>
             <div 
-              className="ad-container overflow-hidden rounded-xl"
+              className="ad-container overflow-hidden rounded-xl border border-[var(--border-color)]"
               dangerouslySetInnerHTML={{ __html: siteSettings.adHtml }}
             />
           </div>

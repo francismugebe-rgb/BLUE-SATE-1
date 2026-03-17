@@ -43,18 +43,18 @@ const Matches: React.FC = () => {
           <Heart className="text-[#ff3366] w-6 h-6 fill-current" />
         </div>
         <div>
-          <h2 className="text-3xl font-bold text-slate-900">Your Matches</h2>
-          <p className="text-slate-500 font-medium">You have {matches.length} mutual connections</p>
+          <h2 className="text-3xl font-bold text-[var(--text-primary)]">Your Matches</h2>
+          <p className="text-[var(--text-secondary)] font-medium">You have {matches.length} mutual connections</p>
         </div>
       </div>
 
       {matches.length === 0 ? (
-        <div className="bg-white rounded-[2.5rem] p-12 text-center border border-slate-100 shadow-sm">
-          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <User className="w-10 h-10 text-slate-200" />
+        <div className="bg-[var(--bg-card)] rounded-[2.5rem] p-12 text-center border border-[var(--border-color)] shadow-sm transition-colors duration-300">
+          <div className="w-20 h-20 bg-[var(--bg-input)] rounded-full flex items-center justify-center mx-auto mb-6">
+            <User className="w-10 h-10 text-[var(--text-secondary)] opacity-20" />
           </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">No matches yet</h3>
-          <p className="text-slate-500 mb-8 max-w-xs mx-auto">Keep swiping to find people you connect with!</p>
+          <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">No matches yet</h3>
+          <p className="text-[var(--text-secondary)] mb-8 max-w-xs mx-auto">Keep swiping to find people you connect with!</p>
           <button 
             onClick={() => navigate('/discover')}
             className="bg-[#ff3366] text-white px-8 py-3 rounded-full font-bold shadow-lg shadow-[#ff3366]/20 hover:bg-[#e62e5c] transition-all"
@@ -65,7 +65,7 @@ const Matches: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {matches.map((match) => (
-            <div key={match.uid} className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden group hover:shadow-md transition-all">
+            <div key={match.uid} className="bg-[var(--bg-card)] rounded-[2rem] shadow-sm border border-[var(--border-color)] overflow-hidden group hover:shadow-md transition-all duration-300">
               <div className="relative aspect-[4/5]">
                 <img 
                   src={match.photos?.[0] || `https://picsum.photos/seed/${match.uid}/400/500`} 
@@ -91,7 +91,7 @@ const Matches: React.FC = () => {
                 </button>
                 <button 
                   onClick={() => navigate(`/profile/${match.uid}`)}
-                  className="w-12 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-slate-100 hover:text-slate-600 transition-all"
+                  className="w-12 bg-[var(--bg-input)] text-[var(--text-secondary)] rounded-xl flex items-center justify-center hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]"
                 >
                   <User className="w-5 h-5" />
                 </button>

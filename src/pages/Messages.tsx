@@ -125,22 +125,22 @@ const Messages: React.FC = () => {
   if (loading) return <div className="p-8">Loading messages...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto h-[calc(100vh-120px)] flex bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+    <div className="max-w-6xl mx-auto h-[calc(100vh-120px)] flex bg-[var(--bg-card)] rounded-[2.5rem] shadow-sm border border-[var(--border-color)] overflow-hidden transition-colors duration-300">
       {/* Sidebar */}
-      <div className="w-[350px] border-r border-slate-100 flex flex-col">
-        <div className="p-6 border-b border-slate-100">
-          <h2 className="text-2xl font-black text-slate-900 mb-4">Messages</h2>
+      <div className="w-[350px] border-r border-[var(--border-color)] flex flex-col">
+        <div className="p-6 border-b border-[var(--border-color)]">
+          <h2 className="text-2xl font-black text-[var(--text-primary)] mb-4">Messages</h2>
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
             <input 
               type="text" 
               placeholder="Search chats..." 
-              className="w-full bg-slate-50 border border-slate-100 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3366]/20 transition-all"
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3366]/20 transition-all placeholder:text-[var(--text-secondary)]"
             />
           </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto no-scrollbar">
           {chats.map(chat => {
             const other = getOtherParticipant(chat);
             return (
@@ -148,57 +148,57 @@ const Messages: React.FC = () => {
                 key={chat.id}
                 onClick={() => setActiveChat(chat)}
                 className={cn(
-                  "w-full p-4 flex gap-3 hover:bg-slate-50 transition-all border-l-4",
-                  activeChat?.id === chat.id ? "bg-slate-50 border-[#ff3366]" : "border-transparent"
+                  "w-full p-4 flex gap-3 hover:bg-[var(--bg-input)] transition-all border-l-4",
+                  activeChat?.id === chat.id ? "bg-[var(--bg-input)] border-[#ff3366]" : "border-transparent"
                 )}
               >
-                <img src={other?.photos?.[0] || `https://picsum.photos/seed/${other?.uid}/100/100`} className="w-12 h-12 rounded-xl object-cover" />
+                <img src={other?.photos?.[0] || `https://picsum.photos/seed/${other?.uid}/100/100`} className="w-12 h-12 rounded-xl object-cover border border-[var(--border-color)]" />
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex justify-between items-center mb-1">
-                    <p className="font-bold text-slate-900 truncate">{other?.name || 'User'}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">{chat.lastMessageAt ? formatTime(chat.lastMessageAt) : ''}</p>
+                    <p className="font-bold text-[var(--text-primary)] truncate">{other?.name || 'User'}</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase">{chat.lastMessageAt ? formatTime(chat.lastMessageAt) : ''}</p>
                   </div>
-                  <p className="text-xs text-slate-500 truncate">{chat.lastMessage || 'No messages yet'}</p>
+                  <p className="text-xs text-[var(--text-secondary)] truncate">{chat.lastMessage || 'No messages yet'}</p>
                 </div>
               </button>
             );
           })}
           {chats.length === 0 && (
-            <div className="p-8 text-center text-slate-400 italic text-sm">No conversations yet</div>
+            <div className="p-8 text-center text-[var(--text-secondary)] italic text-sm">No conversations yet</div>
           )}
         </div>
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col bg-slate-50/30">
+      <div className="flex-1 flex flex-col bg-[var(--bg-input)]/30">
         {activeChat ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between">
+            <div className="p-4 bg-[var(--bg-card)] border-b border-[var(--border-color)] flex items-center justify-between transition-colors duration-300">
               <div className="flex items-center gap-3">
-                <img src={getOtherParticipant(activeChat)?.photos?.[0]} className="w-10 h-10 rounded-xl object-cover" />
+                <img src={getOtherParticipant(activeChat)?.photos?.[0]} className="w-10 h-10 rounded-xl object-cover border border-[var(--border-color)]" />
                 <div>
-                  <p className="font-bold text-slate-900">{getOtherParticipant(activeChat)?.name}</p>
+                  <p className="font-bold text-[var(--text-primary)]">{getOtherParticipant(activeChat)?.name}</p>
                   <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">Online</p>
                 </div>
               </div>
-              <button className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg transition-all">
+              <button className="p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-input)] rounded-lg transition-all">
                 <MoreVertical className="w-5 h-5" />
               </button>
             </div>
 
             {/* Messages List */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
               {messages.map((msg, i) => {
                 const isMe = msg.senderId === authUser?.uid;
                 return (
                   <div key={msg.id} className={cn("flex", isMe ? "justify-end" : "justify-start")}>
                     <div className={cn(
                       "max-w-[70%] p-4 rounded-2xl text-sm shadow-sm",
-                      isMe ? "bg-[#ff3366] text-white rounded-tr-none" : "bg-white text-slate-700 rounded-tl-none border border-slate-100"
+                      isMe ? "bg-[#ff3366] text-white rounded-tr-none" : "bg-[var(--bg-card)] text-[var(--text-primary)] rounded-tl-none border border-[var(--border-color)]"
                     )}>
                       <p className="leading-relaxed">{msg.text}</p>
-                      <div className={cn("flex items-center gap-1 mt-1 justify-end", isMe ? "text-white/60" : "text-slate-400")}>
+                      <div className={cn("flex items-center gap-1 mt-1 justify-end", isMe ? "text-white/60" : "text-[var(--text-secondary)]")}>
                         <span className="text-[10px] font-bold uppercase">{formatTime(msg.createdAt)}</span>
                         {isMe && (msg.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />)}
                       </div>
@@ -210,8 +210,8 @@ const Messages: React.FC = () => {
             </div>
 
             {/* Input Area */}
-            <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-slate-100 flex gap-3">
-              <button type="button" className="p-3 text-slate-400 hover:bg-slate-50 rounded-xl transition-all">
+            <form onSubmit={handleSendMessage} className="p-4 bg-[var(--bg-card)] border-t border-[var(--border-color)] flex gap-3 transition-colors duration-300">
+              <button type="button" className="p-3 text-[var(--text-secondary)] hover:bg-[var(--bg-input)] rounded-xl transition-all">
                 <ImageIcon className="w-5 h-5" />
               </button>
               <input 
@@ -219,7 +219,7 @@ const Messages: React.FC = () => {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Type your message..." 
-                className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3366]/20 transition-all"
+                className="flex-1 bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3366]/20 transition-all placeholder:text-[var(--text-secondary)]"
               />
               <button 
                 type="submit"
@@ -231,9 +231,9 @@ const Messages: React.FC = () => {
             </form>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 space-y-4">
-            <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center">
-              <MessageCircle className="w-10 h-10 text-slate-300" />
+          <div className="flex-1 flex flex-col items-center justify-center text-[var(--text-secondary)] space-y-4">
+            <div className="w-20 h-20 bg-[var(--bg-input)] rounded-3xl flex items-center justify-center">
+              <MessageCircle className="w-10 h-10 text-[var(--text-secondary)] opacity-20" />
             </div>
             <p className="font-bold">Select a conversation to start chatting</p>
           </div>

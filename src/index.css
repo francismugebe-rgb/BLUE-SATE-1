@@ -6,8 +6,38 @@
 }
 
 @layer base {
+  :root {
+    --bg-app: #f5f6fa;
+    --bg-card: #ffffff;
+    --text-primary: #0f172a; /* slate-900 */
+    --text-secondary: #64748b; /* slate-500 */
+    --border-color: #e2e8f0; /* slate-200 */
+    --bg-sidebar: #ffffff;
+    --bg-header: #ffffff;
+    --bg-input: #f8fafc; /* slate-50 */
+  }
+
+  .dark {
+    --bg-app: #0f172a; /* slate-900 */
+    --bg-card: #1e293b; /* slate-800 */
+    --text-primary: #f8fafc; /* slate-50 */
+    --text-secondary: #94a3b8; /* slate-400 */
+    --border-color: #334155; /* slate-700 */
+    --bg-sidebar: #1e293b;
+    --bg-header: #1e293b;
+    --bg-input: #0f172a;
+  }
+
   body {
-    @apply bg-[#f5f6fa] text-slate-900;
+    @apply bg-[var(--bg-app)] text-[var(--text-primary)] transition-colors duration-300;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
@@ -17,7 +47,7 @@
   }
   
   .card {
-    @apply bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8;
+    @apply bg-[var(--bg-card)] rounded-[2.5rem] shadow-sm border border-[var(--border-color)] p-8 transition-colors duration-300;
   }
 }
 

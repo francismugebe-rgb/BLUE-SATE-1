@@ -1,13 +1,26 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Bell, Lock, Eye, Trash2, ChevronRight, ShieldCheck } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
+import { Shield, Bell, Lock, Eye, Trash2, ChevronRight, ShieldCheck, Sun, Moon } from 'lucide-react';
 
 const Settings: React.FC = () => {
   const { profile, isAdmin } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
-  const sections: { title: string, items: { icon: any, label: string, desc: string, action?: () => void }[] }[] = [
+  const sections: { title: string, items: { icon: any, label: string, desc: string, action?: () => void, toggle?: boolean, toggleValue?: boolean }[] }[] = [
+    {
+      title: 'Appearance',
+      items: [
+        { 
+          icon: theme === 'light' ? Moon : Sun, 
+          label: 'Theme', 
+          desc: `Currently using ${theme} mode`,
+          action: toggleTheme
+        },
+      ]
+    },
     {
       title: 'Account Settings',
       items: [
@@ -40,29 +53,29 @@ const Settings: React.FC = () => {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h2 className="text-3xl font-bold text-slate-900 mb-8">Settings</h2>
+      <h2 className="text-3xl font-bold text-[var(--text-primary)] mb-8">Settings</h2>
 
       <div className="space-y-8">
         {sections.map((section, idx) => (
           <div key={idx} className="space-y-4">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest ml-4">{section.title}</h3>
-            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+            <h3 className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-widest ml-4">{section.title}</h3>
+            <div className="bg-[var(--bg-card)] rounded-[2rem] shadow-sm border border-[var(--border-color)] overflow-hidden transition-colors duration-300">
               {section.items.map((item, i) => (
                 <button 
                   key={i}
                   onClick={item.action}
-                  className="w-full flex items-center justify-between p-6 hover:bg-slate-50 transition-all border-b border-slate-50 last:border-0 group"
+                  className="w-full flex items-center justify-between p-6 hover:bg-[var(--bg-input)] transition-all border-b border-[var(--border-color)] last:border-0 group"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center group-hover:bg-white transition-colors">
-                      <item.icon className="w-6 h-6 text-slate-400 group-hover:text-[#ff3366]" />
+                    <div className="w-12 h-12 bg-[var(--bg-input)] rounded-2xl flex items-center justify-center group-hover:bg-[var(--bg-card)] transition-colors">
+                      <item.icon className="w-6 h-6 text-[var(--text-secondary)] group-hover:text-[#ff3366]" />
                     </div>
                     <div className="text-left">
-                      <h4 className="font-bold text-slate-900">{item.label}</h4>
-                      <p className="text-sm text-slate-400 font-medium">{item.desc}</p>
+                      <h4 className="font-bold text-[var(--text-primary)]">{item.label}</h4>
+                      <p className="text-sm text-[var(--text-secondary)] font-medium">{item.desc}</p>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-all" />
+                  <ChevronRight className="w-5 h-5 text-[var(--text-secondary)] opacity-30 group-hover:opacity-100 transition-all" />
                 </button>
               ))}
             </div>
@@ -70,11 +83,11 @@ const Settings: React.FC = () => {
         ))}
 
         <div className="pt-8">
-          <button className="w-full bg-red-50 text-red-500 p-6 rounded-[2rem] font-bold flex items-center justify-center gap-2 hover:bg-red-100 transition-all border border-red-100">
+          <button className="w-full bg-red-50 dark:bg-red-900/20 text-red-500 p-6 rounded-[2rem] font-bold flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all border border-red-100 dark:border-red-900/30">
             <Trash2 className="w-5 h-5" />
             <span>Delete Account</span>
           </button>
-          <p className="text-center text-slate-400 text-xs mt-4 font-medium">
+          <p className="text-center text-[var(--text-secondary)] text-xs mt-4 font-medium">
             This action is permanent and cannot be undone.
           </p>
         </div>

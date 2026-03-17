@@ -105,16 +105,16 @@ const Discover: React.FC = () => {
     setCurrentIndex(prev => prev + 1);
   };
 
-  if (loading) return <div className="flex items-center justify-center h-full">Loading profiles...</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-[var(--text-primary)]">Loading profiles...</div>;
 
   if (currentIndex >= users.length && !showMatchModal) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-6">
-        <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6">
-          <Star className="w-12 h-12 text-slate-300" />
+        <div className="w-24 h-24 bg-[var(--bg-input)] rounded-full flex items-center justify-center mb-6">
+          <Star className="w-12 h-12 text-[var(--text-secondary)]" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">No more profiles!</h2>
-        <p className="text-slate-500 max-w-xs">Check back later or try changing your preferences to find more people nearby.</p>
+        <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">No more profiles!</h2>
+        <p className="text-[var(--text-secondary)] max-w-xs">Check back later or try changing your preferences to find more people nearby.</p>
       </div>
     );
   }
@@ -134,19 +134,19 @@ const Discover: React.FC = () => {
             <motion.div
               initial={{ scale: 0.5, y: 100 }}
               animate={{ scale: 1, y: 0 }}
-              className="bg-white rounded-[3rem] p-10 text-center max-w-sm w-full relative overflow-hidden"
+              className="bg-[var(--bg-card)] rounded-[3rem] p-10 text-center max-w-sm w-full relative overflow-hidden border border-[var(--border-color)]"
             >
               <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#ff3366] to-purple-600"></div>
               <Sparkles className="w-16 h-16 text-[#ff3366] mx-auto mb-6 animate-pulse" />
-              <h2 className="text-4xl font-black text-slate-900 mb-2 italic">It's a Match!</h2>
-              <p className="text-slate-500 mb-8 font-medium">You and {showMatchModal.name} liked each other.</p>
+              <h2 className="text-4xl font-black text-[var(--text-primary)] mb-2 italic">It's a Match!</h2>
+              <p className="text-[var(--text-secondary)] mb-8 font-medium">You and {showMatchModal.name} liked each other.</p>
               
               <div className="flex justify-center gap-4 mb-10">
                 <div className="relative">
-                  <img src={profile?.photos?.[0] || 'https://picsum.photos/seed/me/100/100'} className="w-24 h-24 rounded-full border-4 border-white shadow-xl object-cover" referrerPolicy="no-referrer" />
+                  <img src={profile?.photos?.[0] || 'https://picsum.photos/seed/me/100/100'} className="w-24 h-24 rounded-full border-4 border-[var(--bg-card)] shadow-xl object-cover" referrerPolicy="no-referrer" />
                 </div>
                 <div className="relative -ml-6">
-                  <img src={showMatchModal.photos?.[0] || 'https://picsum.photos/seed/them/100/100'} className="w-24 h-24 rounded-full border-4 border-white shadow-xl object-cover" referrerPolicy="no-referrer" />
+                  <img src={showMatchModal.photos?.[0] || 'https://picsum.photos/seed/them/100/100'} className="w-24 h-24 rounded-full border-4 border-[var(--bg-card)] shadow-xl object-cover" referrerPolicy="no-referrer" />
                 </div>
               </div>
 
@@ -163,7 +163,7 @@ const Discover: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setShowMatchModal(null)}
-                  className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors"
+                  className="w-full py-4 text-[var(--text-secondary)] font-bold hover:text-[var(--text-primary)] transition-colors"
                 >
                   Keep Discovering
                 </button>
@@ -180,7 +180,7 @@ const Discover: React.FC = () => {
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ x: 300, opacity: 0 }}
-            className="absolute inset-0 bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100"
+            className="absolute inset-0 bg-[var(--bg-card)] rounded-[2.5rem] shadow-2xl overflow-hidden border border-[var(--border-color)]"
           >
             <img 
               src={currentUser.photos?.[0] || `https://picsum.photos/seed/${currentUser.uid}/600/800`} 
@@ -223,7 +223,7 @@ const Discover: React.FC = () => {
       <div className="flex justify-center gap-6 py-8">
         <button 
           onClick={() => handleSwipe('left')}
-          className="w-16 h-16 bg-white rounded-full shadow-xl flex items-center justify-center text-slate-400 hover:text-red-500 hover:scale-110 transition-all border border-slate-100"
+          className="w-16 h-16 bg-[var(--bg-card)] rounded-full shadow-xl flex items-center justify-center text-[var(--text-secondary)] hover:text-red-500 hover:scale-110 transition-all border border-[var(--border-color)]"
         >
           <X className="w-8 h-8" />
         </button>

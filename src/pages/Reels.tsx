@@ -108,7 +108,7 @@ const Reels: React.FC = () => {
   return (
     <div className="max-w-md mx-auto space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter italic">Reels</h2>
+        <h2 className="text-3xl font-black text-[var(--text-primary)] uppercase tracking-tighter italic">Reels</h2>
         <button 
           onClick={() => setIsAdding(true)}
           className="bg-[#ff3366] text-white p-3 rounded-2xl shadow-lg shadow-[#ff3366]/20 hover:scale-105 transition-all"
@@ -118,16 +118,16 @@ const Reels: React.FC = () => {
       </div>
 
       {isAdding && (
-        <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100 space-y-4 animate-in fade-in slide-in-from-top-4">
+        <div className="bg-[var(--bg-card)] p-6 rounded-[2rem] shadow-xl border border-[var(--border-color)] space-y-4 animate-in fade-in slide-in-from-top-4 transition-colors duration-300">
           <div className="flex justify-between items-center">
-            <h3 className="font-bold text-slate-900">Post a Reel</h3>
-            <button onClick={() => setIsAdding(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            <h3 className="font-bold text-[var(--text-primary)]">Post a Reel</h3>
+            <button onClick={() => setIsAdding(false)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><X className="w-5 h-5" /></button>
           </div>
           <form onSubmit={handleAddReel} className="space-y-4">
             <div 
               onClick={() => fileInputRef.current?.click()}
               className={cn(
-                "w-full aspect-video bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all group",
+                "w-full aspect-video bg-[var(--bg-input)] border-2 border-dashed border-[var(--border-color)] rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-[var(--bg-card)] transition-all group",
                 videoFile && "border-[#ff3366] bg-rose-50/30"
               )}
             >
@@ -141,29 +141,29 @@ const Reels: React.FC = () => {
               {videoFile ? (
                 <div className="text-center p-4">
                   <Play className="w-12 h-12 text-[#ff3366] mx-auto mb-2" />
-                  <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{videoFile.name}</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                  <p className="text-sm font-bold text-[var(--text-primary)] truncate max-w-[200px]">{videoFile.name}</p>
+                  <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest mt-1">
                     {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
                   </p>
                 </div>
               ) : (
                 <>
-                  <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                    <Upload className="w-6 h-6 text-slate-400 group-hover:text-[#ff3366]" />
+                  <div className="w-12 h-12 rounded-full bg-[var(--bg-card)] shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <Upload className="w-6 h-6 text-[var(--text-secondary)] group-hover:text-[#ff3366]" />
                   </div>
-                  <p className="text-sm font-bold text-slate-900">Choose a video</p>
-                  <p className="text-xs text-slate-400">MP4, MOV, or any video format</p>
+                  <p className="text-sm font-bold text-[var(--text-primary)]">Choose a video</p>
+                  <p className="text-xs text-[var(--text-secondary)]">MP4, MOV, or any video format</p>
                 </>
               )}
             </div>
 
             {isUploading && (
               <div className="space-y-2">
-                <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
+                <div className="flex justify-between text-xs font-bold text-[var(--text-secondary)] uppercase tracking-widest">
                   <span>Uploading...</span>
                   <span>{Math.round(uploadProgress || 0)}%</span>
                 </div>
-                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-[var(--bg-input)] rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-[#ff3366] transition-all duration-300" 
                     style={{ width: `${uploadProgress}%` }}
@@ -176,7 +176,7 @@ const Reels: React.FC = () => {
               placeholder="Write a caption..."
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 h-24 resize-none"
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 h-24 resize-none"
             />
             <button 
               disabled={!videoFile || isUploading}
@@ -197,7 +197,7 @@ const Reels: React.FC = () => {
 
       <div className="space-y-8">
         {reels.map(reel => (
-          <div key={reel.id} className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden group">
+          <div key={reel.id} className="bg-[var(--bg-card)] rounded-[2.5rem] shadow-sm border border-[var(--border-color)] overflow-hidden group transition-colors duration-300">
             <div className="relative aspect-[9/16] bg-black flex items-center justify-center overflow-hidden">
               {/* In a real app we'd use a video tag, here we simulate with an image if it's not a direct video link */}
               <video 
@@ -241,7 +241,7 @@ const Reels: React.FC = () => {
               </div>
             </div>
             <div className="p-6">
-              <p className="text-slate-700 font-medium">{reel.caption}</p>
+              <p className="text-[var(--text-primary)] font-medium">{reel.caption}</p>
             </div>
           </div>
         ))}

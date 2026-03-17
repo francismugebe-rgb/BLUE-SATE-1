@@ -3,8 +3,9 @@ import { useParams } from 'react-router-dom';
 import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, query, where, getDocs, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { UserProfile, Post, Reel } from '../types';
-import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand } from 'lucide-react';
+import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand, Sun, Moon } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { INTERESTS_LIST, RELATIONSHIP_STATUS_LIST, COUNTRIES, GENDERS } from '../constants';
 import { cn, fileToBase64, validateFile } from '../lib/utils';
@@ -14,6 +15,7 @@ import { TransactionType } from '../types';
 const Profile: React.FC = () => {
   const { id } = useParams();
   const { profile, user: authUser, isAdmin } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const { openChat } = useChat();
   const [targetProfile, setTargetProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -301,9 +303,9 @@ const Profile: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto pb-12">
-      <div className="bg-white shadow-sm border-b border-slate-200 -mt-8 mb-8">
+      <div className="bg-[var(--bg-card)] shadow-sm border-b border-[var(--border-color)] -mt-8 mb-8 transition-colors duration-300">
         {/* Header / Photos */}
-        <div className="relative h-[350px] md:h-[450px] bg-slate-200">
+        <div className="relative h-[350px] md:h-[450px] bg-[var(--bg-input)]">
           {/* Cover Photo */}
           <div className="absolute inset-0">
             <img 
@@ -315,7 +317,7 @@ const Profile: React.FC = () => {
           </div>
 
           {canEdit && (
-            <label className="absolute bottom-4 right-4 bg-white px-4 py-2 rounded-lg text-slate-900 hover:bg-slate-100 transition-all flex items-center gap-2 font-bold cursor-pointer shadow-md">
+            <label className="absolute bottom-4 right-4 bg-[var(--bg-card)] px-4 py-2 rounded-lg text-[var(--text-primary)] hover:bg-[var(--bg-input)] transition-all flex items-center gap-2 font-bold cursor-pointer shadow-md border border-[var(--border-color)]">
               <Camera className="w-4 h-4" />
               <span className="text-sm">Edit Cover Photo</span>
               <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'cover')} className="hidden" />
@@ -327,11 +329,11 @@ const Profile: React.FC = () => {
             <div className="relative group">
               <img 
                 src={targetProfile.photos?.[0] || `https://picsum.photos/seed/${targetProfile.uid}/400/400`} 
-                className="w-40 h-40 md:w-44 md:h-44 rounded-full object-cover border-4 border-white shadow-lg bg-white"
+                className="w-40 h-40 md:w-44 md:h-44 rounded-full object-cover border-4 border-[var(--bg-card)] shadow-lg bg-[var(--bg-card)]"
                 referrerPolicy="no-referrer"
               />
               {canEdit && (
-                <label className="absolute bottom-2 right-2 bg-slate-100 p-2 rounded-full text-slate-700 hover:bg-slate-200 transition-all cursor-pointer shadow-md border border-slate-200">
+                <label className="absolute bottom-2 right-2 bg-[var(--bg-input)] p-2 rounded-full text-[var(--text-primary)] hover:bg-[var(--bg-card)] transition-all cursor-pointer shadow-md border border-[var(--border-color)]">
                   <Camera className="w-5 h-5" />
                   <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'profile')} className="hidden" />
                 </label>
@@ -367,7 +369,7 @@ const Profile: React.FC = () => {
                     onClick={() => isEditing ? handleSave() : setIsEditing(true)}
                     className={cn(
                       "px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 shadow-sm",
-                      isEditing ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-900 hover:bg-slate-200"
+                      isEditing ? "bg-emerald-500 text-white" : "bg-[var(--bg-input)] text-[var(--text-primary)] hover:bg-[var(--bg-card)] border border-[var(--border-color)]"
                     )}
                   >
                     {isEditing ? <Check className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
@@ -391,6 +393,15 @@ const Profile: React.FC = () => {
                       <span>{isMatching ? 'Matching...' : 'Find Matches'}</span>
                     </button>
                   )}
+                  {isOwnProfile && (
+                    <button 
+                      onClick={toggleTheme}
+                      className="bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-color)] px-4 py-2 rounded-lg font-bold hover:bg-[var(--bg-input)] transition-all flex items-center gap-2 shadow-sm"
+                    >
+                      {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                      <span>{theme === 'light' ? 'Dark Mode' : 'Light Mode'}</span>
+                    </button>
+                  )}
                 </>
               )}
               {!isOwnProfile && (
@@ -400,7 +411,7 @@ const Profile: React.FC = () => {
                     className={cn(
                       "px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 shadow-sm",
                       profile?.following?.includes(targetProfile.uid) 
-                        ? "bg-slate-100 text-slate-900" 
+                        ? "bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border-color)]" 
                         : "bg-[#1877f2] text-white hover:bg-[#166fe5]"
                     )}
                   >
@@ -416,7 +427,7 @@ const Profile: React.FC = () => {
                   </button>
                   <button 
                     onClick={handleWave}
-                    className="bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-lg font-bold hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
+                    className="bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-color)] px-4 py-2 rounded-lg font-bold hover:bg-[var(--bg-input)] transition-all flex items-center gap-2 shadow-sm"
                   >
                     <Hand className="w-4 h-4 text-amber-500" />
                     <span>Wave</span>
@@ -429,14 +440,14 @@ const Profile: React.FC = () => {
 
         {/* Tabs */}
         <div className="px-4 md:px-8 mt-4">
-          <div className="flex border-t border-slate-100">
+          <div className="flex border-t border-[var(--border-color)]">
             {(['posts', 'about', 'friends', 'photos', 'reels'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={cn(
                   "px-4 py-4 font-bold text-sm capitalize transition-all relative",
-                  activeTab === tab ? "text-[#1877f2]" : "text-slate-500 hover:bg-slate-50"
+                  activeTab === tab ? "text-[#1877f2]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-input)]"
                 )}
               >
                 {tab}
@@ -451,113 +462,113 @@ const Profile: React.FC = () => {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Intro */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
-            <h3 className="text-xl font-black text-slate-900">Intro</h3>
+          <div className="bg-[var(--bg-card)] p-4 rounded-xl shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
+            <h3 className="text-xl font-black text-[var(--text-primary)]">Intro</h3>
             {isEditing ? (
               <textarea
                 value={editedData.bio || ''}
                 onChange={(e) => setEditedData({...editedData, bio: e.target.value})}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none h-24 resize-none"
+                className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl p-3 text-sm focus:outline-none h-24 resize-none"
                 placeholder="Describe who you are"
               />
             ) : (
-              <p className="text-center text-slate-700 font-medium">{targetProfile.bio || 'No bio yet'}</p>
+              <p className="text-center text-[var(--text-primary)] font-medium opacity-90">{targetProfile.bio || 'No bio yet'}</p>
             )}
             
               <div className="space-y-3">
-                <div className="flex items-center gap-3 text-slate-600">
-                  <MapPin className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm">Lives in <span className="font-bold text-slate-900">{targetProfile.city}, {targetProfile.country}</span></span>
+                <div className="flex items-center gap-3 text-[var(--text-secondary)]">
+                  <MapPin className="w-5 h-5 opacity-70" />
+                  <span className="text-sm">Lives in <span className="font-bold text-[var(--text-primary)]">{targetProfile.city}, {targetProfile.country}</span></span>
                 </div>
-                <div className="flex items-center gap-3 text-slate-600">
-                  <Globe className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm">Nationality: <span className="font-bold text-slate-900">{targetProfile.nationality || 'Not specified'}</span></span>
+                <div className="flex items-center gap-3 text-[var(--text-secondary)]">
+                  <Globe className="w-5 h-5 opacity-70" />
+                  <span className="text-sm">Nationality: <span className="font-bold text-[var(--text-primary)]">{targetProfile.nationality || 'Not specified'}</span></span>
                 </div>
-                <div className="flex items-center gap-3 text-slate-600">
-                  <Globe className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm">From <span className="font-bold text-slate-900">{targetProfile.country || 'Unknown'}</span></span>
+                <div className="flex items-center gap-3 text-[var(--text-secondary)]">
+                  <Globe className="w-5 h-5 opacity-70" />
+                  <span className="text-sm">From <span className="font-bold text-[var(--text-primary)]">{targetProfile.country || 'Unknown'}</span></span>
                 </div>
-                <div className="flex items-center gap-3 text-slate-600">
-                  <Briefcase className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm">Works as <span className="font-bold text-slate-900">{targetProfile.occupation || 'Professional'}</span></span>
+                <div className="flex items-center gap-3 text-[var(--text-secondary)]">
+                  <Briefcase className="w-5 h-5 opacity-70" />
+                  <span className="text-sm">Works as <span className="font-bold text-[var(--text-primary)]">{targetProfile.occupation || 'Professional'}</span></span>
                 </div>
-                <div className="flex items-center gap-3 text-slate-600">
-                  <Heart className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm"><span className="font-bold text-slate-900">{targetProfile.relationshipStatus || 'Single'}</span></span>
+                <div className="flex items-center gap-3 text-[var(--text-secondary)]">
+                  <Heart className="w-5 h-5 opacity-70" />
+                  <span className="text-sm"><span className="font-bold text-[var(--text-primary)]">{targetProfile.relationshipStatus || 'Single'}</span></span>
                 </div>
-                <div className="flex items-center gap-3 text-slate-600">
-                  <User className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm"><span className="font-bold text-slate-900">{targetProfile.gender}</span> interested in <span className="font-bold text-slate-900">{targetProfile.interestedIn}</span></span>
+                <div className="flex items-center gap-3 text-[var(--text-secondary)]">
+                  <User className="w-5 h-5 opacity-70" />
+                  <span className="text-sm"><span className="font-bold text-[var(--text-primary)]">{targetProfile.gender}</span> interested in <span className="font-bold text-[var(--text-primary)]">{targetProfile.interestedIn}</span></span>
                 </div>
-                <div className="flex items-center gap-3 text-slate-600">
-                  <Star className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm"><span className="font-bold text-slate-900">{targetProfile.points}</span> Points earned</span>
+                <div className="flex items-center gap-3 text-[var(--text-secondary)]">
+                  <Star className="w-5 h-5 opacity-70" />
+                  <span className="text-sm"><span className="font-bold text-[var(--text-primary)]">{targetProfile.points}</span> Points earned</span>
                 </div>
               </div>
 
               {isEditing && (
-                <div className="pt-4 border-t border-slate-100 space-y-4">
+                <div className="pt-4 border-t border-[var(--border-color)] space-y-4">
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="Nationality" value={editedData.nationality || ''} onChange={e => setEditedData({...editedData, nationality: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
-                    <select value={editedData.country || ''} onChange={e => setEditedData({...editedData, country: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border">
+                    <input type="text" placeholder="Nationality" value={editedData.nationality || ''} onChange={e => setEditedData({...editedData, nationality: e.target.value})} className="bg-[var(--bg-input)] text-[var(--text-primary)] p-2 rounded-lg text-xs border border-[var(--border-color)]" />
+                    <select value={editedData.country || ''} onChange={e => setEditedData({...editedData, country: e.target.value})} className="bg-[var(--bg-input)] text-[var(--text-primary)] p-2 rounded-lg text-xs border border-[var(--border-color)]">
                       <option value="">Select Country</option>
                       {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="City" value={editedData.city || ''} onChange={e => setEditedData({...editedData, city: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
-                    <select value={editedData.gender || ''} onChange={e => setEditedData({...editedData, gender: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border">
+                    <input type="text" placeholder="City" value={editedData.city || ''} onChange={e => setEditedData({...editedData, city: e.target.value})} className="bg-[var(--bg-input)] text-[var(--text-primary)] p-2 rounded-lg text-xs border border-[var(--border-color)]" />
+                    <select value={editedData.gender || ''} onChange={e => setEditedData({...editedData, gender: e.target.value})} className="bg-[var(--bg-input)] text-[var(--text-primary)] p-2 rounded-lg text-xs border border-[var(--border-color)]">
                       <option value="">Gender</option>
                       {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <select value={editedData.interestedIn || ''} onChange={e => setEditedData({...editedData, interestedIn: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border">
+                    <select value={editedData.interestedIn || ''} onChange={e => setEditedData({...editedData, interestedIn: e.target.value})} className="bg-[var(--bg-input)] text-[var(--text-primary)] p-2 rounded-lg text-xs border border-[var(--border-color)]">
                       <option value="">Interested In</option>
                       {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
-                    <select value={editedData.relationshipStatus || ''} onChange={e => setEditedData({...editedData, relationshipStatus: e.target.value})} className="w-full bg-slate-50 p-2 rounded-lg text-xs border">
+                    <select value={editedData.relationshipStatus || ''} onChange={e => setEditedData({...editedData, relationshipStatus: e.target.value})} className="w-full bg-[var(--bg-input)] text-[var(--text-primary)] p-2 rounded-lg text-xs border border-[var(--border-color)]">
                       {RELATIONSHIP_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-1 gap-2">
-                    <input type="text" placeholder="Occupation" value={editedData.occupation || ''} onChange={e => setEditedData({...editedData, occupation: e.target.value})} className="bg-slate-50 p-2 rounded-lg text-xs border" />
+                    <input type="text" placeholder="Occupation" value={editedData.occupation || ''} onChange={e => setEditedData({...editedData, occupation: e.target.value})} className="bg-[var(--bg-input)] text-[var(--text-primary)] p-2 rounded-lg text-xs border border-[var(--border-color)]" />
                   </div>
                 </div>
               )}
           </div>
 
           {/* Photos Preview */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
+          <div className="bg-[var(--bg-card)] p-4 rounded-xl shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-black text-slate-900">Photos</h3>
+              <h3 className="text-xl font-black text-[var(--text-primary)]">Photos</h3>
               <button onClick={() => setActiveTab('photos')} className="text-[#1877f2] text-sm font-bold hover:underline">See all photos</button>
             </div>
             <div className="grid grid-cols-3 gap-1 rounded-xl overflow-hidden">
               {(userPosts.filter(p => p.image).slice(0, 9)).map((p, i) => (
-                <img key={i} src={p.image!} className="aspect-square object-cover w-full hover:opacity-90 cursor-pointer" />
+                <img key={i} src={p.image!} className="aspect-square object-cover w-full hover:opacity-90 cursor-pointer border border-[var(--border-color)]" />
               ))}
-              {userPosts.filter(p => p.image).length === 0 && <p className="col-span-3 text-center py-8 text-slate-400 text-sm italic">No photos yet</p>}
+              {userPosts.filter(p => p.image).length === 0 && <p className="col-span-3 text-center py-8 text-[var(--text-secondary)] text-sm italic">No photos yet</p>}
             </div>
           </div>
 
           {/* Friends Preview */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
+          <div className="bg-[var(--bg-card)] p-4 rounded-xl shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-xl font-black text-slate-900">Friends</h3>
-                <p className="text-slate-500 text-sm font-bold">{friendCount} friends</p>
+                <h3 className="text-xl font-black text-[var(--text-primary)]">Friends</h3>
+                <p className="text-[var(--text-secondary)] text-sm font-bold">{friendCount} friends</p>
               </div>
               <button onClick={() => setActiveTab('friends')} className="text-[#1877f2] text-sm font-bold hover:underline">See all friends</button>
             </div>
             <div className="grid grid-cols-3 gap-4">
               {friends.map((friend, i) => (
                 <div key={i} className="space-y-1">
-                  <img src={friend.photos?.[0] || `https://picsum.photos/seed/${friend.uid}/100/100`} className="aspect-square object-cover w-full rounded-lg shadow-sm" />
-                  <p className="text-[11px] font-bold text-slate-900 truncate">{friend.name}</p>
+                  <img src={friend.photos?.[0] || `https://picsum.photos/seed/${friend.uid}/100/100`} className="aspect-square object-cover w-full rounded-lg shadow-sm border border-[var(--border-color)]" />
+                  <p className="text-[11px] font-bold text-[var(--text-primary)] truncate">{friend.name}</p>
                 </div>
               ))}
-              {friends.length === 0 && <p className="col-span-3 text-center py-8 text-slate-400 text-sm italic">No friends yet</p>}
+              {friends.length === 0 && <p className="col-span-3 text-center py-8 text-[var(--text-secondary)] text-sm italic">No friends yet</p>}
             </div>
           </div>
         </div>
@@ -567,65 +578,65 @@ const Profile: React.FC = () => {
           {activeTab === 'posts' && (
             <div className="space-y-6">
               {isOwnProfile && (
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex gap-3">
-                  <img src={profile?.photos?.[0]} className="w-10 h-10 rounded-full object-cover" />
+                <div className="bg-[var(--bg-card)] p-4 rounded-xl shadow-sm border border-[var(--border-color)] flex gap-3 transition-colors duration-300">
+                  <img src={profile?.photos?.[0]} className="w-10 h-10 rounded-full object-cover border border-[var(--border-color)]" />
                   <button 
                     onClick={() => setActiveTab('posts')} // Or trigger post modal
-                    className="flex-1 bg-slate-100 hover:bg-slate-200 rounded-full px-4 text-left text-slate-500 font-medium"
+                    className="flex-1 bg-[var(--bg-input)] hover:bg-[var(--bg-card)] rounded-full px-4 text-left text-[var(--text-secondary)] font-medium transition-colors"
                   >
                     What's on your mind, {profile?.name}?
                   </button>
                 </div>
               )}
               {userPosts.map(post => (
-                <div key={post.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div key={post.id} className="bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border-color)] overflow-hidden transition-colors duration-300">
                   <div className="p-4">
                     <div className="flex items-center gap-3 mb-4">
-                      <img src={post.authorPhoto} className="w-10 h-10 rounded-full object-cover" />
+                      <img src={post.authorPhoto} className="w-10 h-10 rounded-full object-cover border border-[var(--border-color)]" />
                       <div>
-                        <p className="font-bold text-slate-900">{post.authorName}</p>
-                        <p className="text-xs text-slate-400">Just now</p>
+                        <p className="font-bold text-[var(--text-primary)]">{post.authorName}</p>
+                        <p className="text-xs text-[var(--text-secondary)]">Just now</p>
                       </div>
                     </div>
-                    <p className="text-slate-800 mb-4">{post.content}</p>
-                    {post.image && <img src={post.image} className="w-full rounded-lg" />}
+                    <p className="text-[var(--text-primary)] mb-4 opacity-90">{post.content}</p>
+                    {post.image && <img src={post.image} className="w-full rounded-lg border border-[var(--border-color)]" />}
                   </div>
                 </div>
               ))}
               {userPosts.length === 0 && (
-                <div className="bg-white p-12 rounded-xl border border-dashed border-slate-300 text-center">
-                  <p className="text-slate-400 font-bold">No posts to show yet.</p>
+                <div className="bg-[var(--bg-card)] p-12 rounded-xl border border-dashed border-[var(--border-color)] text-center transition-colors duration-300">
+                  <p className="text-[var(--text-secondary)] font-bold">No posts to show yet.</p>
                 </div>
               )}
             </div>
           )}
 
           {activeTab === 'about' && (
-            <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 space-y-8">
-              <h3 className="text-2xl font-black text-slate-900">About</h3>
+            <div className="bg-[var(--bg-card)] p-8 rounded-xl shadow-sm border border-[var(--border-color)] space-y-8 transition-colors duration-300">
+              <h3 className="text-2xl font-black text-[var(--text-primary)]">About</h3>
               <div className="grid md:grid-cols-2 gap-8">
                 <div className="space-y-6">
-                  <h4 className="font-bold text-slate-400 uppercase text-xs tracking-widest">Overview</h4>
+                  <h4 className="font-bold text-[var(--text-secondary)] uppercase text-xs tracking-widest">Overview</h4>
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <MapPin className="w-5 h-5 text-slate-400" />
-                      <span className="text-slate-700">Lives in <span className="font-bold">{targetProfile.location || 'Not specified'}</span></span>
+                      <MapPin className="w-5 h-5 text-[var(--text-secondary)] opacity-70" />
+                      <span className="text-[var(--text-secondary)]">Lives in <span className="font-bold text-[var(--text-primary)]">{targetProfile.location || 'Not specified'}</span></span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Briefcase className="w-5 h-5 text-slate-400" />
-                      <span className="text-slate-700">Works as <span className="font-bold">{targetProfile.occupation || 'Professional'}</span></span>
+                      <Briefcase className="w-5 h-5 text-[var(--text-secondary)] opacity-70" />
+                      <span className="text-[var(--text-secondary)]">Works as <span className="font-bold text-[var(--text-primary)]">{targetProfile.occupation || 'Professional'}</span></span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Heart className="w-5 h-5 text-slate-400" />
-                      <span className="text-slate-700">Relationship: <span className="font-bold">{targetProfile.relationshipStatus || 'Single'}</span></span>
+                      <Heart className="w-5 h-5 text-[var(--text-secondary)] opacity-70" />
+                      <span className="text-[var(--text-secondary)]">Relationship: <span className="font-bold text-[var(--text-primary)]">{targetProfile.relationshipStatus || 'Single'}</span></span>
                     </div>
                   </div>
                 </div>
                 <div className="space-y-6">
-                  <h4 className="font-bold text-slate-400 uppercase text-xs tracking-widest">Interests</h4>
+                  <h4 className="font-bold text-[var(--text-secondary)] uppercase text-xs tracking-widest">Interests</h4>
                   <div className="flex flex-wrap gap-2">
                     {targetProfile.interests?.map(i => (
-                      <span key={i} className="px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-600">{i}</span>
+                      <span key={i} className="px-3 py-1 bg-[var(--bg-input)] rounded-full text-xs font-bold text-[var(--text-secondary)] border border-[var(--border-color)]">{i}</span>
                     ))}
                   </div>
                 </div>
@@ -634,39 +645,39 @@ const Profile: React.FC = () => {
           )}
 
           {activeTab === 'friends' && (
-            <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-              <h3 className="text-2xl font-black text-slate-900 mb-6">{matchingUsers.length > 0 ? 'Matches' : 'Friends'}</h3>
+            <div className="bg-[var(--bg-card)] p-8 rounded-xl shadow-sm border border-[var(--border-color)] transition-colors duration-300">
+              <h3 className="text-2xl font-black text-[var(--text-primary)] mb-6">{matchingUsers.length > 0 ? 'Matches' : 'Friends'}</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {(matchingUsers.length > 0 ? matchingUsers : friends).map((friend, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 border border-slate-100 rounded-xl hover:bg-slate-50 transition-all cursor-pointer">
-                    <img src={friend.photos?.[0] || `https://picsum.photos/seed/${friend.uid}/100/100`} className="w-16 h-16 rounded-lg object-cover" />
-                    <p className="font-bold text-slate-900">{friend.name}</p>
+                  <div key={i} className="flex items-center gap-3 p-3 border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-input)] transition-all cursor-pointer">
+                    <img src={friend.photos?.[0] || `https://picsum.photos/seed/${friend.uid}/100/100`} className="w-16 h-16 rounded-lg object-cover border border-[var(--border-color)]" />
+                    <p className="font-bold text-[var(--text-primary)]">{friend.name}</p>
                   </div>
                 ))}
               </div>
               {matchingUsers.length > 0 && (
-                <button onClick={() => setMatchingUsers([])} className="mt-6 text-slate-500 text-sm font-bold hover:underline">Back to friends</button>
+                <button onClick={() => setMatchingUsers([])} className="mt-6 text-[var(--text-secondary)] text-sm font-bold hover:underline">Back to friends</button>
               )}
             </div>
           )}
 
           {activeTab === 'photos' && (
-            <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-              <h3 className="text-2xl font-black text-slate-900 mb-6">Photos</h3>
+            <div className="bg-[var(--bg-card)] p-8 rounded-xl shadow-sm border border-[var(--border-color)] transition-colors duration-300">
+              <h3 className="text-2xl font-black text-[var(--text-primary)] mb-6">Photos</h3>
               <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                 {userPosts.filter(p => p.image).map((post, i) => (
-                  <img key={i} src={post.image!} className="aspect-square object-cover w-full rounded-lg hover:opacity-90 cursor-pointer" />
+                  <img key={i} src={post.image!} className="aspect-square object-cover w-full rounded-lg hover:opacity-90 cursor-pointer border border-[var(--border-color)]" />
                 ))}
               </div>
             </div>
           )}
 
           {activeTab === 'reels' && (
-            <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-              <h3 className="text-2xl font-black text-slate-900 mb-6">Reels</h3>
+            <div className="bg-[var(--bg-card)] p-8 rounded-xl shadow-sm border border-[var(--border-color)] transition-colors duration-300">
+              <h3 className="text-2xl font-black text-[var(--text-primary)] mb-6">Reels</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {userReels.map((reel, i) => (
-                  <div key={i} className="relative aspect-[9/16] rounded-xl overflow-hidden group cursor-pointer">
+                  <div key={i} className="relative aspect-[9/16] rounded-xl overflow-hidden group cursor-pointer border border-[var(--border-color)]">
                     <video src={reel.videoUrl} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-all flex items-center justify-center">
                       <Play className="w-10 h-10 text-white fill-current opacity-0 group-hover:opacity-100 transition-all" />
