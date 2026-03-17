@@ -10,8 +10,8 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const storage = getStorage(app);
 
 // Configure Storage retry limits
-storage.maxUploadRetryTime = 120000; // 2 minutes
-storage.maxOperationRetryTime = 120000; // 2 minutes
+storage.maxUploadRetryTime = 600000; // 10 minutes
+storage.maxOperationRetryTime = 600000; // 10 minutes
 
 // Error Handling Spec for Firestore Permissions
 export enum OperationType {
