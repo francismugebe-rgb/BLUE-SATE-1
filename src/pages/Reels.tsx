@@ -45,47 +45,64 @@ const Reels: React.FC = () => {
     if (!profile || !videoFile) return;
 
     setIsUploading(true);
-    const storageRef = ref(storage, `reels/${profile.uid}/${Date.now()}_${videoFile.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, videoFile);
+    setUploadProgress(0);
+    
+    const fileName = `${Date.now()}_${videoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const storageRef = ref(storage, `reels/${profile.uid}/${fileName}`);
+    
+    try {
+      console.log("Starting upload for:", fileName, "Size:", videoFile.size);
+      const uploadTask = uploadBytesResumable(storageRef, videoFile);
 
-    uploadTask.on('state_changed', 
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setUploadProgress(progress);
-      }, 
-      (error) => {
-        console.error("Upload error:", error);
-        alert("Failed to upload video. Please try again.");
-        setIsUploading(false);
-        setUploadProgress(null);
-      }, 
-      async () => {
-        try {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          await addDoc(collection(db, 'reels'), {
-            userId: profile.uid,
-            authorName: profile.name,
-            authorPhoto: profile.photos?.[0] || '',
-            videoUrl: downloadURL,
-            caption,
-            likes: [],
-            comments: [],
-            views: 0,
-            createdAt: new Date().toISOString()
-          });
-          setIsAdding(false);
-          setVideoFile(null);
-          setCaption('');
+      // Set up progress listener
+      const unsubscribe = uploadTask.on('state_changed', 
+        (snapshot) => {
+          const progress = snapshot.totalBytes > 0 
+            ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100 
+            : 0;
+          console.log(`Upload progress: ${progress}%`);
+          setUploadProgress(progress);
+        }, 
+        (error) => {
+          console.error("Upload task error:", error);
+          alert(`Upload failed: ${error.message}`);
+          setIsUploading(false);
           setUploadProgress(null);
-          setIsUploading(false);
-          alert("Reel shared successfully!");
-        } catch (err) {
-          console.error("Error finalizing reel upload:", err);
-          handleFirestoreError(err, OperationType.CREATE, 'reels');
-          setIsUploading(false);
         }
-      }
-    );
+      );
+
+      // Wait for upload to complete
+      await uploadTask;
+      console.log("Upload completed successfully");
+      
+      const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+      console.log("Got download URL:", downloadURL);
+
+      await addDoc(collection(db, 'reels'), {
+        userId: profile.uid,
+        authorName: profile.name,
+        authorPhoto: profile.photos?.[0] || '',
+        videoUrl: downloadURL,
+        caption,
+        likes: [],
+        comments: [],
+        views: 0,
+        createdAt: new Date().toISOString()
+      });
+
+      console.log("Firestore document created");
+      setIsAdding(false);
+      setVideoFile(null);
+      setCaption('');
+      setUploadProgress(null);
+      setIsUploading(false);
+      alert("Reel shared successfully!");
+    } catch (err: any) {
+      console.error("Error in handleAddReel:", err);
+      alert(`Failed to share reel: ${err.message || 'Unknown error'}`);
+      setIsUploading(false);
+      setUploadProgress(null);
+    }
   };
 
   const handleLike = async (reel: Reel) => {
