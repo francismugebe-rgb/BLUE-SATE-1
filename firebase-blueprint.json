@@ -205,6 +205,24 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["participants", "updatedAt"]
+    },
+    "Reel": {
+      "title": "Reel",
+      "description": "Short video content",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorPhoto": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "caption": { "type": "string" },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "comments": { "type": "array", "items": { "type": "object" } },
+        "views": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "authorName", "videoUrl", "createdAt"]
     }
   },
   "firestore": {
@@ -251,6 +269,10 @@
     "settings": {
       "schema": "object",
       "description": "Site settings"
+    },
+    "reels": {
+      "schema": "Reel",
+      "description": "Short video reels"
     }
   }
 }

@@ -91,9 +91,11 @@ const Login: React.FC = () => {
     <div className="min-h-screen bg-[#f5f6fa] flex items-center justify-center p-6">
       <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl p-10 border border-slate-100">
         <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-[#ff3366] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#ff3366]/20">
-            <Heart className="text-white w-10 h-10 fill-current" />
-          </div>
+          <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
+            <div className="w-16 h-16 bg-[#ff3366] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#ff3366]/20">
+              <Heart className="text-white w-10 h-10 fill-current" />
+            </div>
+          </Link>
           <h1 className="text-3xl font-bold text-slate-900">Welcome Back</h1>
           <p className="text-slate-500 mt-2">Sign in to continue your journey</p>
         </div>

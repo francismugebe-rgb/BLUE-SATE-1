@@ -22,15 +22,15 @@ const Landing: React.FC = () => {
     <div className="min-h-screen bg-white overflow-hidden">
       {/* Navbar */}
       <nav className="max-w-7xl mx-auto px-6 py-6 flex justify-between items-center">
-        <div className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <div className="w-8 h-8 bg-[#ff3366] rounded-lg flex items-center justify-center">
             <Heart className="text-white w-5 h-5 fill-current" />
           </div>
           <span className="text-xl font-bold text-slate-900 tracking-tight">HeartConnect</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <Link to="/login" className="text-slate-600 font-medium hover:text-[#ff3366] transition-colors">Login</Link>
-          <Link to="/register" className="bg-[#ff3366] text-white px-6 py-2 rounded-full font-semibold hover:bg-[#e62e5c] transition-all shadow-lg shadow-[#ff3366]/20">
+        </Link>
+        <div className="flex items-center gap-3 md:gap-4">
+          <Link to="/login" className="text-sm md:text-base text-slate-600 font-bold hover:text-[#ff3366] transition-colors">Login</Link>
+          <Link to="/register" className="bg-[#ff3366] text-white px-4 py-2 md:px-6 md:py-2 rounded-full text-xs md:text-base font-bold hover:bg-[#e62e5c] transition-all shadow-lg shadow-[#ff3366]/20">
             Join Now
           </Link>
         </div>
@@ -43,17 +43,17 @@ const Landing: React.FC = () => {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-6xl md:text-7xl font-extrabold text-slate-900 leading-[1.1] mb-6">
+          <h1 className="text-4xl md:text-7xl font-extrabold text-slate-900 leading-[1.1] mb-6">
             Find your <span className="text-[#ff3366]">perfect</span> match today.
           </h1>
           <p className="text-xl text-slate-600 mb-10 max-w-lg leading-relaxed">
             The modern way to connect, date, and build meaningful relationships. Join thousands of people finding love and friendship on HeartConnect.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Link to="/register" className="bg-[#ff3366] text-white px-10 py-4 rounded-full text-lg font-bold hover:scale-105 transition-all shadow-xl shadow-[#ff3366]/30 text-center">
+            <Link to="/register" className="bg-[#ff3366] text-white px-8 py-3 md:px-10 md:py-4 rounded-full text-base md:text-lg font-bold hover:scale-105 transition-all shadow-xl shadow-[#ff3366]/30 text-center">
               Create Account
             </Link>
-            <Link to="/login" className="bg-slate-100 text-slate-900 px-10 py-4 rounded-full text-lg font-bold hover:bg-slate-200 transition-all text-center">
+            <Link to="/login" className="bg-slate-100 text-slate-900 px-8 py-3 md:px-10 md:py-4 rounded-full text-base md:text-lg font-bold hover:bg-slate-200 transition-all text-center">
               Sign In
             </Link>
           </div>

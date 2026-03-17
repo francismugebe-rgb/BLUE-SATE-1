@@ -5,7 +5,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { UserProfile, Post, Reel } from '../types';
-import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand, Sun, Moon } from 'lucide-react';
+import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand, Sun, Moon, Loader2 } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { INTERESTS_LIST, RELATIONSHIP_STATUS_LIST, COUNTRIES, GENDERS } from '../constants';
 import { cn, fileToBase64, validateFile } from '../lib/utils';
@@ -28,6 +28,8 @@ const Profile: React.FC = () => {
   const [friendCount, setFriendCount] = useState(0);
   const [matchingUsers, setMatchingUsers] = useState<UserProfile[]>([]);
   const [isMatching, setIsMatching] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
 
   const isOwnProfile = !id || id === authUser?.uid;
   const canEdit = isOwnProfile || isAdmin;
@@ -91,6 +93,7 @@ const Profile: React.FC = () => {
     try {
       await updateDoc(doc(db, 'users', targetProfile.uid), editedData);
       setIsEditing(false);
+      setUploadSuccess(null);
       alert('Profile saved successfully!');
       if (!isOwnProfile) {
         // If admin edited, refresh target profile
@@ -146,27 +149,38 @@ const Profile: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !targetProfile) return;
 
+    if (!isEditing) {
+      alert('Please click "Edit Profile" before changing photos.');
+      return;
+    }
+
     const validation = validateFile(file, 'image');
     if (!validation.valid) {
       alert(validation.error);
       return;
     }
 
+    setIsUploadingPhoto(true);
+    setUploadSuccess(null);
+
     try {
       const base64 = await fileToBase64(file);
-      const updateObj = type === 'profile' 
-        ? { photos: [base64, ...(targetProfile.photos?.slice(1) || [])] }
-        : { coverPhoto: base64 };
       
-      await updateDoc(doc(db, 'users', targetProfile.uid), updateObj);
-      
-      if (isOwnProfile) {
-        // Profile will update via onSnapshot in AuthContext
+      if (type === 'profile') {
+        setEditedData(prev => ({ 
+          ...prev, 
+          photos: [base64, ...(prev.photos?.slice(1) || targetProfile.photos?.slice(1) || [])] 
+        }));
       } else {
-        setTargetProfile({ ...targetProfile, ...updateObj });
+        setEditedData(prev => ({ ...prev, coverPhoto: base64 }));
       }
+      
+      setUploadSuccess(`${type === 'profile' ? 'Profile' : 'Cover'} photo ready! Click Save to apply.`);
+      setTimeout(() => setUploadSuccess(null), 3000);
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${targetProfile.uid}`);
+      alert('Failed to process image.');
+    } finally {
+      setIsUploadingPhoto(false);
     }
   };
 
@@ -303,155 +317,171 @@ const Profile: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto pb-12">
-      <div className="bg-[var(--bg-card)] shadow-sm border-b border-[var(--border-color)] -mt-8 mb-8 transition-colors duration-300">
+      <div className="bg-[var(--bg-card)] shadow-sm border-b border-[var(--border-color)] -mt-8 mb-8 transition-colors duration-300 overflow-hidden rounded-b-[3rem]">
         {/* Header / Photos */}
-        <div className="relative h-[350px] md:h-[450px] bg-[var(--bg-input)]">
+        <div className="relative">
           {/* Cover Photo */}
-          <div className="absolute inset-0">
+          <div className="h-[250px] md:h-[350px] bg-[var(--bg-input)] relative">
             <img 
-              src={targetProfile.coverPhoto || `https://picsum.photos/seed/${targetProfile.uid}-cover/1200/400`} 
+              src={editedData.coverPhoto || targetProfile.coverPhoto || `https://picsum.photos/seed/${targetProfile.uid}-cover/1200/400`} 
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            
+            {isEditing && (
+              <label className="absolute bottom-6 right-6 bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl text-white hover:bg-white/30 transition-all flex items-center gap-2 font-bold cursor-pointer border border-white/30 shadow-lg">
+                <Camera className="w-4 h-4" />
+                <span className="text-sm">Change Cover</span>
+                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'cover')} className="hidden" />
+              </label>
+            )}
           </div>
 
-          {canEdit && (
-            <label className="absolute bottom-4 right-4 bg-[var(--bg-card)] px-4 py-2 rounded-lg text-[var(--text-primary)] hover:bg-[var(--bg-input)] transition-all flex items-center gap-2 font-bold cursor-pointer shadow-md border border-[var(--border-color)]">
-              <Camera className="w-4 h-4" />
-              <span className="text-sm">Edit Cover Photo</span>
-              <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'cover')} className="hidden" />
-            </label>
-          )}
-
-          {/* Profile Photo Area */}
-          <div className="absolute -bottom-4 left-4 md:left-8 flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-6 w-full px-4">
-            <div className="relative group">
-              <img 
-                src={targetProfile.photos?.[0] || `https://picsum.photos/seed/${targetProfile.uid}/400/400`} 
-                className="w-40 h-40 md:w-44 md:h-44 rounded-full object-cover border-4 border-[var(--bg-card)] shadow-lg bg-[var(--bg-card)]"
-                referrerPolicy="no-referrer"
-              />
-              {canEdit && (
-                <label className="absolute bottom-2 right-2 bg-[var(--bg-input)] p-2 rounded-full text-[var(--text-primary)] hover:bg-[var(--bg-card)] transition-all cursor-pointer shadow-md border border-[var(--border-color)]">
-                  <Camera className="w-5 h-5" />
-                  <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'profile')} className="hidden" />
-                </label>
-              )}
-            </div>
-            
-            <div className="mb-6 text-center md:text-left flex-1">
-              <div className="flex flex-col md:flex-row md:items-center gap-2">
-                <h1 className="text-3xl md:text-4xl font-black text-white drop-shadow-md flex items-center gap-2 justify-center md:justify-start">
-                  {targetProfile.name}
-                  {targetProfile.isVerified && (
-                    <BadgeCheck className="w-6 h-6 md:w-8 md:h-8 text-[#00a2ff] fill-white" />
+          {/* Profile Info Section - Arranged to avoid overlap */}
+          <div className="px-4 md:px-8 -mt-20 md:-mt-24 relative z-10">
+            <div className="flex flex-col md:flex-row items-center md:items-end gap-6">
+              {/* Profile Photo */}
+              <div className="relative">
+                <div className="relative">
+                  <img 
+                    src={(editedData.photos?.[0]) || targetProfile.photos?.[0] || `https://picsum.photos/seed/${targetProfile.uid}/400/400`} 
+                    className="w-40 h-40 md:w-48 md:h-48 rounded-[2.5rem] object-cover border-4 border-[var(--bg-card)] shadow-2xl bg-[var(--bg-card)]"
+                    referrerPolicy="no-referrer"
+                  />
+                  {isEditing && (
+                    <label className="absolute -bottom-2 -right-2 bg-[#ff3366] p-3 rounded-2xl text-white hover:scale-110 transition-all cursor-pointer shadow-xl border-2 border-[var(--bg-card)]">
+                      <Camera className="w-5 h-5" />
+                      <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'profile')} className="hidden" />
+                    </label>
                   )}
-                </h1>
-              </div>
-              <p className="text-white/90 font-bold mt-1 drop-shadow-sm">{friendCount} followers</p>
-              <div className="flex items-center gap-2 mt-3 justify-center md:justify-start">
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-white/20 backdrop-blur-md rounded-lg text-white text-xs font-bold border border-white/20">
-                  <Trophy className="w-3 h-3 text-yellow-400" />
-                  <span>{targetProfile.level}</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-white/20 backdrop-blur-md rounded-lg text-white text-xs font-bold border border-white/20">
-                  <Star className="w-3 h-3 text-yellow-400" />
-                  <span>{targetProfile.points} Points</span>
+                  {isUploadingPhoto && (
+                    <div className="absolute inset-0 bg-black/40 rounded-[2.5rem] flex items-center justify-center">
+                      <Loader2 className="w-8 h-8 text-white animate-spin" />
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
 
-            <div className="mb-6 flex flex-wrap gap-2 justify-center md:justify-start">
-              {canEdit && (
-                <>
-                  <button 
-                    onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-                    className={cn(
-                      "px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 shadow-sm",
-                      isEditing ? "bg-emerald-500 text-white" : "bg-[var(--bg-input)] text-[var(--text-primary)] hover:bg-[var(--bg-card)] border border-[var(--border-color)]"
+              {/* User Info */}
+              <div className="flex-1 text-center md:text-left pb-4">
+                <div className="flex flex-col md:flex-row md:items-center gap-2 mb-2">
+                  <h1 className="text-3xl md:text-4xl font-black text-[var(--text-primary)] md:text-white drop-shadow-sm flex items-center gap-2 justify-center md:justify-start">
+                    {targetProfile.name}
+                    {targetProfile.isVerified && (
+                      <BadgeCheck className="w-6 h-6 md:w-8 md:h-8 text-[#00a2ff] fill-white" />
                     )}
-                  >
-                    {isEditing ? <Check className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
-                    <span>{isEditing ? 'Save' : 'Edit Profile'}</span>
-                  </button>
-                  {isOwnProfile && !profile?.isPremium && (
-                    <button onClick={handleUpgradeProfile} className="bg-amber-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-amber-600 transition-all flex items-center gap-2 shadow-sm">
-                      <Zap className="w-4 h-4" />
-                      <span>Upgrade</span>
-                    </button>
-                  )}
-                  {isOwnProfile && !profile?.isVerified && !profile?.isVerifiedPending && (
-                    <button onClick={handleRequestVerification} className="bg-[#00a2ff] text-white px-4 py-2 rounded-lg font-bold hover:bg-[#0088d6] transition-all flex items-center gap-2 shadow-sm">
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>Verify</span>
-                    </button>
-                  )}
-                  {isOwnProfile && (
-                    <button onClick={handleMatch} disabled={isMatching} className="bg-rose-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-rose-600 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50">
-                      <Search className="w-4 h-4" />
-                      <span>{isMatching ? 'Matching...' : 'Find Matches'}</span>
-                    </button>
-                  )}
-                  {isOwnProfile && (
+                  </h1>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
+                  <p className="text-[var(--text-secondary)] md:text-white/90 font-bold drop-shadow-sm">{friendCount} followers</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-white/20 backdrop-blur-md rounded-lg text-[var(--text-primary)] md:text-white text-xs font-bold border border-[var(--border-color)] md:border-white/20">
+                      <Trophy className="w-3 h-3 text-yellow-400" />
+                      <span>{targetProfile.level}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-white/20 backdrop-blur-md rounded-lg text-[var(--text-primary)] md:text-white text-xs font-bold border border-[var(--border-color)] md:border-white/20">
+                      <Star className="w-3 h-3 text-yellow-400" />
+                      <span>{targetProfile.points} Points</span>
+                    </div>
+                  </div>
+                </div>
+
+                {uploadSuccess && (
+                  <div className="mt-2 text-emerald-500 font-bold text-sm animate-bounce">
+                    {uploadSuccess}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pb-4 flex flex-wrap gap-2 justify-center md:justify-start">
+                {canEdit && (
+                  <>
                     <button 
-                      onClick={toggleTheme}
-                      className="bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-color)] px-4 py-2 rounded-lg font-bold hover:bg-[var(--bg-input)] transition-all flex items-center gap-2 shadow-sm"
+                      onClick={() => {
+                        if (isEditing) {
+                          handleSave();
+                        } else {
+                          setEditedData(targetProfile || {});
+                          setIsEditing(true);
+                        }
+                      }}
+                      disabled={isUploadingPhoto}
+                      className={cn(
+                        "px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg",
+                        isEditing ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-[var(--bg-card)] text-[var(--text-primary)] hover:bg-[var(--bg-input)] border border-[var(--border-color)]"
+                      )}
                     >
-                      {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                      <span>{theme === 'light' ? 'Dark Mode' : 'Light Mode'}</span>
+                      {isEditing ? <Check className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />}
+                      <span>{isEditing ? 'Save Changes' : 'Edit Profile'}</span>
                     </button>
-                  )}
-                </>
-              )}
-              {!isOwnProfile && (
-                <>
-                  <button 
-                    onClick={handleFollow}
-                    className={cn(
-                      "px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 shadow-sm",
-                      profile?.following?.includes(targetProfile.uid) 
-                        ? "bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border-color)]" 
-                        : "bg-[#1877f2] text-white hover:bg-[#166fe5]"
+                    
+                    {isOwnProfile && !profile?.isPremium && (
+                      <button onClick={handleUpgradeProfile} className="bg-amber-500 text-white px-6 py-3 rounded-2xl font-bold hover:bg-amber-600 transition-all flex items-center gap-2 shadow-lg">
+                        <Zap className="w-5 h-5" />
+                        <span>Upgrade</span>
+                      </button>
                     )}
-                  >
-                    {profile?.following?.includes(targetProfile.uid) ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                    <span>{profile?.following?.includes(targetProfile.uid) ? 'Unfollow' : 'Follow'}</span>
-                  </button>
-                  <button 
-                    onClick={() => openChat(targetProfile)}
-                    className="bg-[#ff3366] text-white px-4 py-2 rounded-lg font-bold hover:bg-[#e62e5c] transition-all flex items-center gap-2 shadow-sm shadow-[#ff3366]/20"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span>Message</span>
-                  </button>
-                  <button 
-                    onClick={handleWave}
-                    className="bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-color)] px-4 py-2 rounded-lg font-bold hover:bg-[var(--bg-input)] transition-all flex items-center gap-2 shadow-sm"
-                  >
-                    <Hand className="w-4 h-4 text-amber-500" />
-                    <span>Wave</span>
-                  </button>
-                </>
-              )}
+                    
+                    {isOwnProfile && !profile?.isVerified && !profile?.isVerifiedPending && (
+                      <button onClick={handleRequestVerification} className="bg-[#00a2ff] text-white px-6 py-3 rounded-2xl font-bold hover:bg-[#0088d6] transition-all flex items-center gap-2 shadow-lg">
+                        <ShieldCheck className="w-5 h-5" />
+                        <span>Verify</span>
+                      </button>
+                    )}
+                    
+                    {isOwnProfile && (
+                      <button onClick={handleMatch} disabled={isMatching} className="bg-rose-500 text-white px-6 py-3 rounded-2xl font-bold hover:bg-rose-600 transition-all flex items-center gap-2 shadow-lg disabled:opacity-50">
+                        <Search className="w-5 h-5" />
+                        <span>{isMatching ? 'Matching...' : 'Find Matches'}</span>
+                      </button>
+                    )}
+                  </>
+                )}
+                {!isOwnProfile && (
+                  <>
+                    <button 
+                      onClick={handleFollow}
+                      className={cn(
+                        "px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg",
+                        profile?.following?.includes(targetProfile.uid) 
+                          ? "bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border-color)]" 
+                          : "bg-[#1877f2] text-white hover:bg-[#166fe5]"
+                      )}
+                    >
+                      {profile?.following?.includes(targetProfile.uid) ? <UserMinus className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                      <span>{profile?.following?.includes(targetProfile.uid) ? 'Unfollow' : 'Follow'}</span>
+                    </button>
+                    <button 
+                      onClick={() => openChat(targetProfile)}
+                      className="bg-[#ff3366] text-white px-6 py-3 rounded-2xl font-bold hover:bg-[#e62e5c] transition-all flex items-center gap-2 shadow-lg shadow-[#ff3366]/20"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      <span>Message</span>
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="px-4 md:px-8 mt-4">
+        <div className="px-4 md:px-8 mt-6">
           <div className="flex border-t border-[var(--border-color)]">
             {(['posts', 'about', 'friends', 'photos', 'reels'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={cn(
-                  "px-4 py-4 font-bold text-sm capitalize transition-all relative",
-                  activeTab === tab ? "text-[#1877f2]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-input)]"
+                  "px-6 py-5 font-bold text-sm capitalize transition-all relative",
+                  activeTab === tab ? "text-[#ff3366]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-input)]"
                 )}
               >
                 {tab}
-                {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#1877f2]" />}
+                {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#ff3366]" />}
               </button>
             ))}
           </div>

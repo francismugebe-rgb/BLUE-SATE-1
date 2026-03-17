@@ -43,6 +43,19 @@
 //   - read: bool (required)
 //   - createdAt: string (required)
 //
+// Collection: reels
+// Document ID: {reelId}
+// Fields:
+//   - userId: string (required)
+//   - authorName: string (required)
+//   - authorPhoto: string (optional)
+//   - videoUrl: string (required)
+//   - caption: string (optional)
+//   - likes: list (required)
+//   - comments: list (required)
+//   - views: number (required)
+//   - createdAt: string (required)
+//
 // ===============================================================
 
 service cloud.firestore {
@@ -83,6 +96,14 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly(fields);
     }
 
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
     // ===============================================================
     // Domain Validators
     // ===============================================================
@@ -91,7 +112,7 @@ service cloud.firestore {
       return hasRequiredFields(['uid', 'name', 'email', 'role', 'createdAt']) &&
              data.uid is string && data.uid.size() > 0 &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             isValidEmail(data.email) &&
              data.role in ['user', 'admin'] &&
              data.createdAt is string;
     }
@@ -148,6 +169,14 @@ service cloud.firestore {
              data.receiverId is string && data.text is string &&
              data.text.size() > 0 && data.text.size() < 2000 &&
              data.read is bool && data.createdAt is string;
+    }
+
+    function isValidReel(data) {
+      return hasRequiredFields(['userId', 'authorName', 'videoUrl', 'likes', 'comments', 'views', 'createdAt']) &&
+             data.userId is string && data.authorName is string &&
+             data.videoUrl is string && isValidUrl(data.videoUrl) &&
+             data.likes is list && data.comments is list &&
+             data.views is number && data.createdAt is string;
     }
 
     // ===============================================================
@@ -255,6 +284,24 @@ service cloud.firestore {
                         isOwner(resource.data.receiverId) && 
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       }
+    }
+
+    match /reels/{reelId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isAuthenticated() && isNotBanned() &&
+                      isValidReel(request.resource.data) && 
+                      isOwner(request.resource.data.userId);
+                      
+      allow update: if isAuthenticated() && isNotBanned() &&
+                      (
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'comments', 'views']) ||
+                        isOwner(resource.data.userId) || 
+                        isAdmin()
+                      );
+                      
+      allow delete: if isAuthenticated() && 
+                      (isOwner(resource.data.userId) || isAdmin());
     }
 
     // Default deny
