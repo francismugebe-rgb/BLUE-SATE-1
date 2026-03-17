@@ -58,18 +58,23 @@ const Reels: React.FC = () => {
       uploadTask.on('state_changed', 
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log(`Upload progress: ${progress}%`, snapshot.state);
           setUploadProgress(progress);
         },
         (error) => {
-          console.error("Upload failed:", error);
+          console.error("Upload failed in on('state_changed'):", error);
           alert(`Upload failed: ${error.message}`);
           setIsUploading(false);
           setUploadProgress(null);
+        },
+        () => {
+          console.log("Upload task completed callback");
         }
       );
 
+      console.log("Awaiting uploadTask promise...");
       await uploadTask;
-      console.log("Upload completed successfully");
+      console.log("uploadTask promise resolved");
       
       const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
       console.log("Got download URL:", downloadURL);

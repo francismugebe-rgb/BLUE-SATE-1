@@ -157,23 +157,28 @@ const Feed: React.FC = () => {
         const uploadTask = uploadBytesResumable(storageRef, postVideo);
         
         const uploadPromise = new Promise<string>((resolve, reject) => {
+          console.log("Starting uploadPromise for Feed...");
           uploadTask.on('state_changed', 
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              console.log(`Feed upload progress: ${progress}%`, snapshot.state);
               setUploadProgress(progress);
             },
             (error) => {
-              console.error("Upload failed:", error);
+              console.error("Feed upload failed in on('state_changed'):", error);
               reject(error);
             },
             async () => {
+              console.log("Feed upload task completed callback");
               const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
               resolve(downloadURL);
             }
           );
         });
 
+        console.log("Awaiting Feed uploadPromise...");
         mediaUrl = await uploadPromise;
+        console.log("Feed uploadPromise resolved");
         setUploadProgress(100);
 
         if (mediaType === 'video') {

@@ -145,23 +145,28 @@ const Profile: React.FC = () => {
         const uploadTask = uploadBytesResumable(storageRef, postMedia);
         
         const uploadPromise = new Promise<string>((resolve, reject) => {
+          console.log("Starting uploadPromise for Profile...");
           uploadTask.on('state_changed', 
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              console.log(`Profile upload progress: ${progress}%`, snapshot.state);
               setUploadProgress(progress);
             },
             (error) => {
-              console.error("Upload failed:", error);
+              console.error("Profile upload failed in on('state_changed'):", error);
               reject(error);
             },
             async () => {
+              console.log("Profile upload task completed callback");
               const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
               resolve(downloadURL);
             }
           );
         });
 
+        console.log("Awaiting Profile uploadPromise...");
         mediaUrl = await uploadPromise;
+        console.log("Profile uploadPromise resolved");
         setUploadProgress(100);
 
         if (mediaType === 'video') {
