@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, collection, query, where, getDocs, onSnapshot, orderBy, limit } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { UserProfile, Post, Reel } from '../types';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand, Sun, Moon, Loader2, Share2, Send, ExternalLink, MessageSquare } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { INTERESTS_LIST, RELATIONSHIP_STATUS_LIST, COUNTRIES, GENDERS } from '../constants';
@@ -35,6 +36,12 @@ const Profile: React.FC = () => {
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
+  const [newPostContent, setNewPostContent] = useState('');
+  const [postMedia, setPostMedia] = useState<File | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [isPosting, setIsPosting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
 
   const isOwnProfile = !id || id === authUser?.uid;
   const canEdit = isOwnProfile || isAdmin;
@@ -92,6 +99,113 @@ const Profile: React.FC = () => {
     };
     fetchProfile();
   }, [id, profile, isOwnProfile]);
+
+  const getVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        resolve(video.duration);
+      };
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handlePostFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type.startsWith('image/')) {
+      setPostMedia(file);
+      setMediaType('image');
+      setMediaPreview(URL.createObjectURL(file));
+    } else if (file.type.startsWith('video/')) {
+      setPostMedia(file);
+      setMediaType('video');
+      setMediaPreview(URL.createObjectURL(file));
+    } else {
+      alert('Please select an image or video file.');
+    }
+  };
+
+  const handleCreatePost = async () => {
+    if (!profile || (!newPostContent.trim() && !postMedia)) return;
+    setIsPosting(true);
+    setUploadProgress(0);
+
+    try {
+      let mediaUrl = null;
+      let isReel = false;
+
+      if (postMedia) {
+        const fileName = `${Date.now()}_${postMedia.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const storageRef = ref(storage, `posts/${profile.uid}/${fileName}`);
+        
+        const progressInterval = setInterval(() => {
+          setUploadProgress(prev => {
+            if (prev === null) return 0;
+            if (prev >= 90) return 90;
+            return prev + 5;
+          });
+        }, 500);
+
+        const uploadResult = await uploadBytes(storageRef, postMedia);
+        clearInterval(progressInterval);
+        setUploadProgress(100);
+        mediaUrl = await getDownloadURL(uploadResult.ref);
+
+        if (mediaType === 'video') {
+          const duration = await getVideoDuration(postMedia);
+          if (duration < 30) {
+            isReel = true;
+          }
+        }
+      }
+
+      if (isReel && mediaUrl) {
+        await addDoc(collection(db, 'reels'), {
+          userId: profile.uid,
+          authorName: profile.name,
+          authorPhoto: profile.photos?.[0] || '',
+          videoUrl: mediaUrl,
+          caption: newPostContent,
+          likes: [],
+          comments: [],
+          views: 0,
+          createdAt: new Date().toISOString()
+        });
+        alert('Short video added to Reels!');
+      } else {
+        await addDoc(collection(db, 'posts'), {
+          userId: profile.uid,
+          authorName: profile.name,
+          authorPhoto: profile.photos?.[0] || '',
+          isVerified: profile.isVerified || false,
+          content: newPostContent,
+          image: mediaType === 'image' ? mediaUrl : null,
+          video: mediaType === 'video' ? mediaUrl : null,
+          likes: [],
+          comments: [],
+          views: 0,
+          createdAt: new Date().toISOString()
+        });
+        alert('Post shared successfully!');
+      }
+
+      setNewPostContent('');
+      setPostMedia(null);
+      setMediaType(null);
+      setMediaPreview(null);
+      setUploadProgress(null);
+      await accumulatePoints(profile.uid, 'POST');
+    } catch (err) {
+      console.error("Error creating post:", err);
+      alert('Failed to create post.');
+    } finally {
+      setIsPosting(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!authUser || !targetProfile) return;
@@ -686,14 +800,56 @@ const Profile: React.FC = () => {
           {activeTab === 'posts' && (
             <div className="space-y-6">
               {isOwnProfile && (
-                <div className="bg-[var(--bg-card)] p-4 rounded-xl shadow-sm border border-[var(--border-color)] flex gap-3 transition-colors duration-300">
-                  <img src={profile?.photos?.[0]} className="w-10 h-10 rounded-full object-cover border border-[var(--border-color)]" />
-                  <button 
-                    onClick={() => setActiveTab('posts')} // Or trigger post modal
-                    className="flex-1 bg-[var(--bg-input)] hover:bg-[var(--bg-card)] rounded-full px-4 text-left text-[var(--text-secondary)] font-medium transition-colors"
-                  >
-                    What's on your mind, {profile?.name}?
-                  </button>
+                <div className="bg-[var(--bg-card)] p-4 rounded-xl shadow-sm border border-[var(--border-color)] space-y-4 transition-colors duration-300">
+                  <div className="flex gap-3">
+                    <img src={profile?.photos?.[0]} className="w-10 h-10 rounded-full object-cover border border-[var(--border-color)]" />
+                    <textarea
+                      value={newPostContent}
+                      onChange={(e) => setNewPostContent(e.target.value)}
+                      placeholder={`What's on your mind, ${profile?.name}?`}
+                      className="flex-1 bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl p-3 text-sm focus:outline-none h-20 resize-none"
+                    />
+                  </div>
+                  
+                  {mediaPreview && (
+                    <div className="relative rounded-xl overflow-hidden border border-[var(--border-color)]">
+                      {mediaType === 'image' ? (
+                        <img src={mediaPreview} className="w-full max-h-60 object-cover" />
+                      ) : (
+                        <video src={mediaPreview} className="w-full max-h-60 object-cover" controls />
+                      )}
+                      <button 
+                        onClick={() => { setPostMedia(null); setMediaPreview(null); setMediaType(null); }}
+                        className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-full hover:bg-black/70"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {uploadProgress !== null && (
+                    <div className="w-full bg-[var(--bg-input)] h-1 rounded-full overflow-hidden">
+                      <div className="bg-[#ff3366] h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center pt-2 border-t border-[var(--border-color)]">
+                    <div className="flex gap-2">
+                      <label className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-[var(--bg-input)] cursor-pointer text-[var(--text-secondary)] transition-colors">
+                        <ImageIcon className="w-5 h-5 text-green-500" />
+                        <span className="text-xs font-bold">Photo/Video</span>
+                        <input type="file" accept="image/*,video/*" onChange={handlePostFileChange} className="hidden" />
+                      </label>
+                    </div>
+                    <button
+                      onClick={handleCreatePost}
+                      disabled={isPosting || (!newPostContent.trim() && !postMedia)}
+                      className="bg-[#ff3366] text-white px-6 py-1.5 rounded-lg font-bold hover:bg-[#e62e5c] transition-all disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {isPosting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      <span>Post</span>
+                    </button>
+                  </div>
                 </div>
               )}
               {userPosts.map(post => (
@@ -713,6 +869,11 @@ const Profile: React.FC = () => {
                     </div>
                     <p className="text-[var(--text-primary)] mb-4 opacity-90 whitespace-pre-wrap">{post.content}</p>
                     {post.image && <img src={post.image} className="w-full rounded-lg border border-[var(--border-color)] mb-4" referrerPolicy="no-referrer" />}
+                    {post.video && (
+                      <div className="w-full rounded-lg border border-[var(--border-color)] mb-4 overflow-hidden bg-black">
+                        <video src={post.video} className="w-full max-h-[500px]" controls />
+                      </div>
+                    )}
                     
                     <div className="flex items-center gap-6 pt-4 border-t border-[var(--border-color)] relative">
                       <div className="relative">

@@ -45,6 +45,7 @@ export interface Post {
   isVerified: boolean;
   content: string;
   image?: string;
+  video?: string;
   linkPreview?: {
     title?: string;
     description?: string;

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, where, increment, getDocs, getDoc, limit as firestoreLimit } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Post, UserProfile, Page, Group } from '../types';
+import { Post, UserProfile, Page, Group, Reel } from '../types';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X, BadgeCheck, Video, Megaphone, Info, DollarSign, Flag, ExternalLink, Smile, Users, Plus, MessageSquare } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { formatDistanceToNow } from 'date-fns';
@@ -26,6 +27,10 @@ const Feed: React.FC = () => {
   const [feedType, setFeedType] = useState<'global' | 'following'>('global');
   const [newPost, setNewPost] = useState('');
   const [postImage, setPostImage] = useState('');
+  const [postVideo, setPostVideo] = useState<File | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isPosting, setIsPosting] = useState(false);
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
@@ -130,10 +135,10 @@ const Feed: React.FC = () => {
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile || !newPost.trim()) return;
+    if (!profile || (!newPost.trim() && !postVideo && !postImage)) return;
     setIsPosting(true);
+    setUploadProgress(0);
 
-    // Simple link detection
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const urls = newPost.match(urlRegex);
     let linkPreview = null;
@@ -142,26 +147,75 @@ const Feed: React.FC = () => {
     }
 
     try {
-      await addDoc(collection(db, 'posts'), {
-        userId: profile.uid,
-        authorName: profile.name,
-        authorPhoto: profile.photos?.[0] || '',
-        isVerified: profile.isVerified || false,
-        content: newPost,
-        image: postImage || null,
-        linkPreview,
-        likes: [],
-        comments: [],
-        views: 0,
-        createdAt: new Date().toISOString()
-      });
+      let mediaUrl = postImage;
+      let isReel = false;
+
+      if (postVideo) {
+        const fileName = `${Date.now()}_${postVideo.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const storageRef = ref(storage, `posts/${profile.uid}/${fileName}`);
+        
+        const progressInterval = setInterval(() => {
+          setUploadProgress(prev => {
+            if (prev === null) return 0;
+            if (prev >= 90) return 90;
+            return prev + 5;
+          });
+        }, 500);
+
+        const uploadResult = await uploadBytes(storageRef, postVideo);
+        clearInterval(progressInterval);
+        setUploadProgress(100);
+        mediaUrl = await getDownloadURL(uploadResult.ref);
+
+        if (mediaType === 'video') {
+          const duration = await getVideoDuration(postVideo);
+          if (duration < 30) {
+            isReel = true;
+          }
+        }
+      }
+
+      if (isReel && mediaUrl) {
+        await addDoc(collection(db, 'reels'), {
+          userId: profile.uid,
+          authorName: profile.name,
+          authorPhoto: profile.photos?.[0] || '',
+          videoUrl: mediaUrl,
+          caption: newPost,
+          likes: [],
+          comments: [],
+          views: 0,
+          createdAt: new Date().toISOString()
+        });
+        alert('Short video added to Reels!');
+      } else {
+        await addDoc(collection(db, 'posts'), {
+          userId: profile.uid,
+          authorName: profile.name,
+          authorPhoto: profile.photos?.[0] || '',
+          isVerified: profile.isVerified || false,
+          content: newPost,
+          image: mediaType === 'image' ? mediaUrl : (postImage || null),
+          video: mediaType === 'video' ? mediaUrl : null,
+          linkPreview,
+          likes: [],
+          comments: [],
+          views: 0,
+          createdAt: new Date().toISOString()
+        });
+      }
       
       await accumulatePoints(profile.uid, 'POST');
       
       setNewPost('');
       setPostImage('');
+      setPostVideo(null);
+      setMediaType(null);
+      setMediaPreview(null);
+      setUploadProgress(null);
     } catch (err) {
       console.error("Error creating post:", err);
+      alert('Failed to create post.');
     } finally {
       setIsPosting(false);
     }
@@ -282,21 +336,32 @@ const Feed: React.FC = () => {
     }
   };
 
+  const getVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        resolve(video.duration);
+      };
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const validation = validateFile(file, 'image');
-    if (!validation.valid) {
-      alert(validation.error);
-      return;
-    }
-
-    try {
-      const base64 = await fileToBase64(file);
-      setPostImage(base64);
-    } catch (err) {
-      alert("Failed to process image");
+    if (file.type.startsWith('image/')) {
+      setMediaType('image');
+      setPostVideo(file);
+      setMediaPreview(URL.createObjectURL(file));
+    } else if (file.type.startsWith('video/')) {
+      setMediaType('video');
+      setPostVideo(file);
+      setMediaPreview(URL.createObjectURL(file));
+    } else {
+      alert('Please select an image or video file.');
     }
   };
 
@@ -352,24 +417,35 @@ const Feed: React.FC = () => {
               placeholder="What's on your mind?"
               className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366] transition-all resize-none h-24 placeholder:text-[var(--text-secondary)]"
             />
-            {postImage && (
+            {mediaPreview && (
               <div className="relative">
-                <img src={postImage} className="w-full h-40 object-cover rounded-2xl" />
+                {mediaType === 'image' ? (
+                  <img src={mediaPreview} className="w-full max-h-60 object-cover rounded-2xl" />
+                ) : (
+                  <video src={mediaPreview} className="w-full max-h-60 object-cover rounded-2xl" controls />
+                )}
                 <button 
                   type="button"
-                  onClick={() => setPostImage('')}
+                  onClick={() => { setPostVideo(null); setMediaPreview(null); setMediaType(null); }}
                   className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-full"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             )}
+
+            {uploadProgress !== null && (
+              <div className="w-full bg-[var(--bg-input)] h-1 rounded-full overflow-hidden">
+                <div className="bg-[#ff3366] h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+              </div>
+            )}
+
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[#ff3366] transition-colors font-medium cursor-pointer">
                   <ImageIcon className="w-5 h-5" />
-                  <span>Photo</span>
-                  <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                  <span>Photo/Video</span>
+                  <input type="file" accept="image/*,video/*" onChange={handleFileChange} className="hidden" />
                 </label>
                 <button 
                   type="button" 
@@ -435,6 +511,12 @@ const Feed: React.FC = () => {
               <p className="text-[var(--text-primary)] leading-relaxed mb-4 whitespace-pre-wrap opacity-90">
                 {post.content}
               </p>
+
+              {post.video && (
+                <div className="w-full rounded-3xl border border-[var(--border-color)] mb-4 overflow-hidden bg-black">
+                  <video src={post.video} className="w-full max-h-[500px]" controls />
+                </div>
+              )}
 
               {post.linkPreview && (
                 <a 
