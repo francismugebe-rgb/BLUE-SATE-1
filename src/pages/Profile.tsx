@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, query, where, getDocs, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, collection, query, where, getDocs, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { UserProfile, Post, Reel } from '../types';
-import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand, Sun, Moon, Loader2 } from 'lucide-react';
+import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand, Sun, Moon, Loader2, Share2, Send, ExternalLink, MessageSquare } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { INTERESTS_LIST, RELATIONSHIP_STATUS_LIST, COUNTRIES, GENDERS } from '../constants';
 import { cn, fileToBase64, validateFile } from '../lib/utils';
-import { createTransaction } from '../services/pointService';
+import { createTransaction, accumulatePoints } from '../services/pointService';
+import { formatDistanceToNow } from 'date-fns';
 import { TransactionType } from '../types';
+
+const EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
 const Profile: React.FC = () => {
   const { id } = useParams();
@@ -30,6 +33,8 @@ const Profile: React.FC = () => {
   const [isMatching, setIsMatching] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
+  const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
 
   const isOwnProfile = !id || id === authUser?.uid;
   const canEdit = isOwnProfile || isAdmin;
@@ -309,6 +314,79 @@ const Profile: React.FC = () => {
       alert("An error occurred while searching for matches.");
     } finally {
       setIsMatching(false);
+    }
+  };
+
+  const handleLike = async (postId: string, emoji: string = '❤️') => {
+    if (!profile) return;
+    const postRef = doc(db, 'posts', postId);
+    const post = userPosts.find(p => p.id === postId);
+    if (!post) return;
+
+    const existingLike = post.likes.find(l => l.userId === profile.uid);
+    
+    try {
+      if (existingLike) {
+        if (existingLike.emoji === emoji) {
+          await updateDoc(postRef, { likes: arrayRemove(existingLike) });
+        } else {
+          await updateDoc(postRef, { likes: arrayRemove(existingLike) });
+          await updateDoc(postRef, { likes: arrayUnion({ userId: profile.uid, emoji }) });
+        }
+      } else {
+        await updateDoc(postRef, { likes: arrayUnion({ userId: profile.uid, emoji }) });
+        await accumulatePoints(profile.uid, 'LIKE');
+        
+        if (post.userId !== profile.uid) {
+          await addDoc(collection(db, 'notifications'), {
+            receiverId: post.userId,
+            senderId: profile.uid,
+            senderName: profile.name,
+            type: 'like',
+            targetId: postId,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+      setShowEmojiPicker(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `posts/${postId}`);
+    }
+  };
+
+  const handleComment = async (postId: string) => {
+    if (!profile || !commentText[postId]?.trim()) return;
+    const postRef = doc(db, 'posts', postId);
+    const newComment = {
+      userId: profile.uid,
+      userName: profile.name,
+      comment: commentText[postId],
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      await updateDoc(postRef, {
+        comments: arrayUnion(newComment)
+      });
+      await accumulatePoints(profile.uid, 'COMMENT');
+      
+      const post = userPosts.find(p => p.id === postId);
+      if (post && post.userId !== profile.uid) {
+        await addDoc(collection(db, 'notifications'), {
+          receiverId: post.userId,
+          senderId: profile.uid,
+          senderName: profile.name,
+          type: 'comment',
+          targetId: postId,
+          read: false,
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      setCommentText(prev => ({ ...prev, [postId]: '' }));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `posts/${postId}`);
     }
   };
 
@@ -622,14 +700,109 @@ const Profile: React.FC = () => {
                 <div key={post.id} className="bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border-color)] overflow-hidden transition-colors duration-300">
                   <div className="p-4">
                     <div className="flex items-center gap-3 mb-4">
-                      <img src={post.authorPhoto} className="w-10 h-10 rounded-full object-cover border border-[var(--border-color)]" />
+                      <img src={post.authorPhoto || `https://picsum.photos/seed/${post.userId}/100/100`} className="w-10 h-10 rounded-full object-cover border border-[var(--border-color)]" referrerPolicy="no-referrer" />
                       <div>
-                        <p className="font-bold text-[var(--text-primary)]">{post.authorName}</p>
-                        <p className="text-xs text-[var(--text-secondary)]">Just now</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-[var(--text-primary)]">{post.authorName}</p>
+                          {post.isVerified && <BadgeCheck className="w-3 h-3 text-blue-500 fill-blue-500" />}
+                        </div>
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          {formatDistanceToNow(new Date(post.createdAt))} ago
+                        </p>
                       </div>
                     </div>
-                    <p className="text-[var(--text-primary)] mb-4 opacity-90">{post.content}</p>
-                    {post.image && <img src={post.image} className="w-full rounded-lg border border-[var(--border-color)]" />}
+                    <p className="text-[var(--text-primary)] mb-4 opacity-90 whitespace-pre-wrap">{post.content}</p>
+                    {post.image && <img src={post.image} className="w-full rounded-lg border border-[var(--border-color)] mb-4" referrerPolicy="no-referrer" />}
+                    
+                    <div className="flex items-center gap-6 pt-4 border-t border-[var(--border-color)] relative">
+                      <div className="relative">
+                        <button 
+                          onMouseEnter={() => setShowEmojiPicker(post.id)}
+                          onClick={() => handleLike(post.id)}
+                          className={cn(
+                            "flex items-center gap-2 transition-colors font-bold text-sm",
+                            post.likes.some(l => l.userId === profile?.uid) ? "text-[#ff3366]" : "text-[var(--text-secondary)] hover:text-[#ff3366]"
+                          )}
+                        >
+                          <Heart className={cn("w-4 h-4", post.likes.some(l => l.userId === profile?.uid) && "fill-current")} />
+                          <span>{post.likes.length}</span>
+                        </button>
+                        
+                        {showEmojiPicker === post.id && (
+                          <div 
+                            className="absolute bottom-full left-0 mb-2 bg-[var(--bg-card)] shadow-xl border border-[var(--border-color)] rounded-full p-2 flex gap-2 z-10 animate-in fade-in slide-in-from-bottom-2"
+                            onMouseLeave={() => setShowEmojiPicker(null)}
+                          >
+                            {EMOJIS.map(emoji => (
+                              <button 
+                                key={emoji} 
+                                onClick={() => handleLike(post.id, emoji)}
+                                className="hover:scale-125 transition-transform p-1"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <button className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[#6c5ce7] transition-colors font-bold text-sm">
+                        <MessageCircle className="w-4 h-4" />
+                        <span>{post.comments.length}</span>
+                      </button>
+
+                      {profile?.uid !== post.userId && (
+                        <button 
+                          onClick={() => openChat(targetProfile!)}
+                          className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[#1877f2] transition-colors font-bold text-sm"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      <button 
+                        onClick={() => {
+                          const url = `${window.location.origin}/profile/${post.userId}#post-${post.id}`;
+                          navigator.clipboard.writeText(url);
+                          alert("Post link copied to clipboard!");
+                        }}
+                        className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors font-bold text-sm"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Comments Section */}
+                    <div className="mt-4 space-y-3">
+                      {post.comments.slice(0, 3).map((comment, idx) => (
+                        <div key={idx} className="flex gap-2 text-xs">
+                          <div className="bg-[var(--bg-input)] rounded-xl p-2 flex-1">
+                            <span className="font-bold text-[var(--text-primary)] mr-2">{comment.userName}</span>
+                            <span className="text-[var(--text-secondary)]">{comment.comment}</span>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      <div className="flex gap-2 items-center pt-2">
+                        <img src={profile?.photos?.[0] || ''} className="w-6 h-6 rounded-lg object-cover border border-[var(--border-color)]" />
+                        <div className="flex-1 relative">
+                          <input
+                            type="text"
+                            value={commentText[post.id] || ''}
+                            onChange={(e) => setCommentText(prev => ({ ...prev, [post.id]: e.target.value }))}
+                            onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)}
+                            placeholder="Write a comment..."
+                            className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg py-1.5 pl-3 pr-8 focus:outline-none focus:ring-2 focus:ring-[#ff3366]/10 focus:border-[#ff3366] text-xs placeholder:text-[var(--text-secondary)]"
+                          />
+                          <button 
+                            onClick={() => handleComment(post.id)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[#ff3366]"
+                          >
+                            <Send className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -62,10 +62,8 @@ const Feed: React.FC = () => {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
+      // Purely chronological sort to ensure new posts appear at the top
       const sortedPosts = [...postsData].sort((a, b) => {
-        const aVerified = a.isVerified ? 1 : 0;
-        const bVerified = b.isVerified ? 1 : 0;
-        if (aVerified !== bVerified) return bVerified - aVerified;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
       setPosts(sortedPosts);
@@ -508,7 +506,14 @@ const Feed: React.FC = () => {
                     <MessageSquare className="w-5 h-5" />
                   </button>
                 )}
-                <button className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors font-bold text-sm">
+                <button 
+                  onClick={() => {
+                    const url = `${window.location.origin}/feed#post-${post.id}`;
+                    navigator.clipboard.writeText(url);
+                    alert("Post link copied to clipboard!");
+                  }}
+                  className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors font-bold text-sm"
+                >
                   <Share2 className="w-5 h-5" />
                 </button>
               </div>

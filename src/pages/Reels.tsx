@@ -78,7 +78,9 @@ const Reels: React.FC = () => {
           setCaption('');
           setUploadProgress(null);
           setIsUploading(false);
+          alert("Reel shared successfully!");
         } catch (err) {
+          console.error("Error finalizing reel upload:", err);
           handleFirestoreError(err, OperationType.CREATE, 'reels');
           setIsUploading(false);
         }
@@ -225,6 +227,19 @@ const Reels: React.FC = () => {
                     <Heart className={cn("w-6 h-6", reel.likes.includes(profile?.uid || '') && "fill-current")} />
                   </div>
                   <span className="text-white text-xs font-bold drop-shadow-md">{reel.likes.length}</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    const url = `${window.location.origin}/reels#reel-${reel.id}`;
+                    navigator.clipboard.writeText(url);
+                    alert("Reel link copied to clipboard!");
+                  }}
+                  className="flex flex-col items-center gap-1"
+                >
+                  <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/40 transition-all">
+                    <Share2 className="w-6 h-6" />
+                  </div>
+                  <span className="text-white text-xs font-bold drop-shadow-md">Share</span>
                 </button>
                 <button className="flex flex-col items-center gap-1">
                   <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/40 transition-all">
