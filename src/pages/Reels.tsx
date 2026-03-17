@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Reel } from '../types';
@@ -52,30 +52,26 @@ const Reels: React.FC = () => {
     
     try {
       console.log("Starting upload for:", fileName, "Size:", videoFile.size);
-      const uploadTask = uploadBytesResumable(storageRef, videoFile);
+      
+      // For small files (< 5MB), use uploadBytes for better reliability in some network environments
+      // For larger files, uploadBytesResumable is better, but we'll try uploadBytes first for stability
+      
+      // Start a simulated progress bar for uploadBytes since it doesn't provide progress events
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev === null) return 0;
+          if (prev >= 90) return 90; // Cap at 90% until complete
+          return prev + 5;
+        });
+      }, 500);
 
-      // Set up progress listener
-      const unsubscribe = uploadTask.on('state_changed', 
-        (snapshot) => {
-          const progress = snapshot.totalBytes > 0 
-            ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100 
-            : 0;
-          console.log(`Upload progress: ${progress}%`);
-          setUploadProgress(progress);
-        }, 
-        (error) => {
-          console.error("Upload task error:", error);
-          alert(`Upload failed: ${error.message}`);
-          setIsUploading(false);
-          setUploadProgress(null);
-        }
-      );
-
-      // Wait for upload to complete
-      await uploadTask;
+      const uploadResult = await uploadBytes(storageRef, videoFile);
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
       console.log("Upload completed successfully");
       
-      const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+      const downloadURL = await getDownloadURL(uploadResult.ref);
       console.log("Got download URL:", downloadURL);
 
       await addDoc(collection(db, 'reels'), {
@@ -99,9 +95,52 @@ const Reels: React.FC = () => {
       alert("Reel shared successfully!");
     } catch (err: any) {
       console.error("Error in handleAddReel:", err);
-      alert(`Failed to share reel: ${err.message || 'Unknown error'}`);
-      setIsUploading(false);
-      setUploadProgress(null);
+      
+      // If uploadBytes fails, try uploadBytesResumable as a fallback
+      console.log("Attempting fallback with uploadBytesResumable...");
+      try {
+        const uploadTask = uploadBytesResumable(storageRef, videoFile);
+        
+        uploadTask.on('state_changed', 
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+          },
+          (error) => {
+            console.error("Fallback upload failed:", error);
+            alert(`Upload failed: ${error.message}`);
+            setIsUploading(false);
+            setUploadProgress(null);
+          }
+        );
+
+        await uploadTask;
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        
+        await addDoc(collection(db, 'reels'), {
+          userId: profile.uid,
+          authorName: profile.name,
+          authorPhoto: profile.photos?.[0] || '',
+          videoUrl: downloadURL,
+          caption,
+          likes: [],
+          comments: [],
+          views: 0,
+          createdAt: new Date().toISOString()
+        });
+
+        setIsAdding(false);
+        setVideoFile(null);
+        setCaption('');
+        setUploadProgress(null);
+        setIsUploading(false);
+        alert("Reel shared successfully!");
+      } catch (fallbackErr: any) {
+        console.error("Fallback error:", fallbackErr);
+        alert(`Failed to share reel: ${fallbackErr.message || 'Unknown error'}`);
+        setIsUploading(false);
+        setUploadProgress(null);
+      }
     }
   };
 
