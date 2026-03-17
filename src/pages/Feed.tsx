@@ -4,7 +4,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUn
 import { db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Post, UserProfile, Page, Group, Reel } from '../types';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X, BadgeCheck, Video, Megaphone, Info, DollarSign, Flag, ExternalLink, Smile, Users, Plus, MessageSquare } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { formatDistanceToNow } from 'date-fns';
@@ -154,18 +154,27 @@ const Feed: React.FC = () => {
         const fileName = `${Date.now()}_${postVideo.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
         const storageRef = ref(storage, `posts/${profile.uid}/${fileName}`);
         
-        const progressInterval = setInterval(() => {
-          setUploadProgress(prev => {
-            if (prev === null) return 0;
-            if (prev >= 90) return 90;
-            return prev + 5;
-          });
-        }, 500);
+        const uploadTask = uploadBytesResumable(storageRef, postVideo);
+        
+        const uploadPromise = new Promise<string>((resolve, reject) => {
+          uploadTask.on('state_changed', 
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+            },
+            (error) => {
+              console.error("Upload failed:", error);
+              reject(error);
+            },
+            async () => {
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(downloadURL);
+            }
+          );
+        });
 
-        const uploadResult = await uploadBytes(storageRef, postVideo);
-        clearInterval(progressInterval);
+        mediaUrl = await uploadPromise;
         setUploadProgress(100);
-        mediaUrl = await getDownloadURL(uploadResult.ref);
 
         if (mediaType === 'video') {
           const duration = await getVideoDuration(postVideo);

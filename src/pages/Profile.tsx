@@ -5,8 +5,8 @@ import { db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { UserProfile, Post, Reel } from '../types';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand, Sun, Moon, Loader2, Share2, Send, ExternalLink, MessageSquare } from 'lucide-react';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand, Sun, Moon, Loader2, Share2, Send, ExternalLink, MessageSquare, X } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { INTERESTS_LIST, RELATIONSHIP_STATUS_LIST, COUNTRIES, GENDERS } from '../constants';
 import { cn, fileToBase64, validateFile } from '../lib/utils';
@@ -142,18 +142,27 @@ const Profile: React.FC = () => {
         const fileName = `${Date.now()}_${postMedia.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
         const storageRef = ref(storage, `posts/${profile.uid}/${fileName}`);
         
-        const progressInterval = setInterval(() => {
-          setUploadProgress(prev => {
-            if (prev === null) return 0;
-            if (prev >= 90) return 90;
-            return prev + 5;
-          });
-        }, 500);
+        const uploadTask = uploadBytesResumable(storageRef, postMedia);
+        
+        const uploadPromise = new Promise<string>((resolve, reject) => {
+          uploadTask.on('state_changed', 
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+            },
+            (error) => {
+              console.error("Upload failed:", error);
+              reject(error);
+            },
+            async () => {
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(downloadURL);
+            }
+          );
+        });
 
-        const uploadResult = await uploadBytes(storageRef, postMedia);
-        clearInterval(progressInterval);
+        mediaUrl = await uploadPromise;
         setUploadProgress(100);
-        mediaUrl = await getDownloadURL(uploadResult.ref);
 
         if (mediaType === 'video') {
           const duration = await getVideoDuration(postMedia);

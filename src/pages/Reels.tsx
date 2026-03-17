@@ -53,25 +53,25 @@ const Reels: React.FC = () => {
     try {
       console.log("Starting upload for:", fileName, "Size:", videoFile.size);
       
-      // For small files (< 5MB), use uploadBytes for better reliability in some network environments
-      // For larger files, uploadBytesResumable is better, but we'll try uploadBytes first for stability
+      const uploadTask = uploadBytesResumable(storageRef, videoFile);
       
-      // Start a simulated progress bar for uploadBytes since it doesn't provide progress events
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev === null) return 0;
-          if (prev >= 90) return 90; // Cap at 90% until complete
-          return prev + 5;
-        });
-      }, 500);
+      uploadTask.on('state_changed', 
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(progress);
+        },
+        (error) => {
+          console.error("Upload failed:", error);
+          alert(`Upload failed: ${error.message}`);
+          setIsUploading(false);
+          setUploadProgress(null);
+        }
+      );
 
-      const uploadResult = await uploadBytes(storageRef, videoFile);
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-      
+      await uploadTask;
       console.log("Upload completed successfully");
       
-      const downloadURL = await getDownloadURL(uploadResult.ref);
+      const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
       console.log("Got download URL:", downloadURL);
 
       await addDoc(collection(db, 'reels'), {
@@ -95,52 +95,9 @@ const Reels: React.FC = () => {
       alert("Reel shared successfully!");
     } catch (err: any) {
       console.error("Error in handleAddReel:", err);
-      
-      // If uploadBytes fails, try uploadBytesResumable as a fallback
-      console.log("Attempting fallback with uploadBytesResumable...");
-      try {
-        const uploadTask = uploadBytesResumable(storageRef, videoFile);
-        
-        uploadTask.on('state_changed', 
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            setUploadProgress(progress);
-          },
-          (error) => {
-            console.error("Fallback upload failed:", error);
-            alert(`Upload failed: ${error.message}`);
-            setIsUploading(false);
-            setUploadProgress(null);
-          }
-        );
-
-        await uploadTask;
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        
-        await addDoc(collection(db, 'reels'), {
-          userId: profile.uid,
-          authorName: profile.name,
-          authorPhoto: profile.photos?.[0] || '',
-          videoUrl: downloadURL,
-          caption,
-          likes: [],
-          comments: [],
-          views: 0,
-          createdAt: new Date().toISOString()
-        });
-
-        setIsAdding(false);
-        setVideoFile(null);
-        setCaption('');
-        setUploadProgress(null);
-        setIsUploading(false);
-        alert("Reel shared successfully!");
-      } catch (fallbackErr: any) {
-        console.error("Fallback error:", fallbackErr);
-        alert(`Failed to share reel: ${fallbackErr.message || 'Unknown error'}`);
-        setIsUploading(false);
-        setUploadProgress(null);
-      }
+      alert(`Failed to share reel: ${err.message || 'Unknown error'}`);
+      setIsUploading(false);
+      setUploadProgress(null);
     }
   };
 
