@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -5,6 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import fetch from "node-fetch";
+import mysql from "mysql2/promise";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,7 +17,29 @@ const PAYPAL_API = process.env.PAYPAL_MODE === 'live'
   ? 'https://api-m.paypal.com' 
   : 'https://api-m.sandbox.paypal.com';
 
+// Optional MySQL Connection for cPanel
+let pool: any = null;
+if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_NAME) {
+  try {
+    pool = mysql.createPool({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0
+    });
+    console.log("MySQL Pool created for cPanel deployment.");
+  } catch (error) {
+    console.error("Failed to create MySQL pool:", error);
+  }
+}
+
 async function getPayPalAccessToken() {
+  if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+    throw new Error("PayPal credentials not configured");
+  }
   const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
   const response = await fetch(`${PAYPAL_API}/v1/oauth2/token`, {
     method: 'POST',
@@ -37,7 +61,7 @@ async function startServer() {
     },
   });
 
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(express.json());
 
@@ -96,7 +120,11 @@ async function startServer() {
 
   // API Routes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", message: "HeartConnect API is running" });
+    res.json({ 
+      status: "ok", 
+      message: "HeartConnect API is running",
+      db: pool ? "mysql" : "firebase-only"
+    });
   });
 
   app.post("/api/paypal/create-order", async (req, res) => {
@@ -164,7 +192,7 @@ async function startServer() {
   }
 
   httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
   });
 }
 
