@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Message, UserProfile } from '../types';
-import { Send, Image as ImageIcon, ChevronLeft, MoreVertical, Smile, MessageCircle } from 'lucide-react';
+import { Send, ImageIcon, ChevronLeft, MoreVertical, Smile, MessageCircle } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
+import { socialApi } from '../api';
 
 const Chat: React.FC = () => {
   const { id: chatId } = useParams();
@@ -40,17 +39,16 @@ const Chat: React.FC = () => {
     if (!profile) return;
     
     const fetchChats = async () => {
-      const matches = profile.matches || [];
       try {
-        const chatList = await Promise.all(matches.map(async (matchId) => {
-          const userDoc = await getDoc(doc(db, 'users', matchId));
-          const otherUserData = userDoc.data() as UserProfile;
-          const id = [profile.uid, matchId].sort().join('_');
-          return { id, otherUser: otherUserData };
-        }));
-        setChats(chatList);
+        const response = await fetch('/api/chats', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (response.ok) {
+          const chatList = await response.json();
+          setChats(chatList);
+        }
       } catch (err) {
-        handleFirestoreError(err, OperationType.GET, 'chats_list');
+        console.error('Error fetching chats:', err);
       }
     };
 
@@ -61,29 +59,28 @@ const Chat: React.FC = () => {
   useEffect(() => {
     if (!chatId || !profile) return;
 
-    const otherUserId = chatId.split('_').find(uid => uid !== profile.uid);
-    if (otherUserId) {
-      getDoc(doc(db, 'users', otherUserId)).then(snap => {
-        if (snap.exists()) setOtherUser(snap.data() as UserProfile);
-      }).catch(err => handleFirestoreError(err, OperationType.GET, `users/${otherUserId}`));
-    }
+    const fetchMessages = async () => {
+      try {
+        const response = await fetch(`/api/messages/${chatId}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (response.ok) {
+          const msgs = await response.json();
+          setMessages(msgs);
+        }
 
-    const path = `chats/${chatId}/messages`;
-    const q = query(
-      collection(db, 'chats', chatId, 'messages'),
-      orderBy('createdAt', 'asc')
-    );
+        const otherUserId = chatId.split('_').find(uid => uid !== profile.uid);
+        if (otherUserId) {
+          const userProfile = await socialApi.getUserProfile(otherUserId);
+          setOtherUser(userProfile);
+        }
+      } catch (err) {
+        console.error('Error fetching messages:', err);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
-      setMessages(msgs);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
-    });
-
+    fetchMessages();
     socketRef.current?.emit('join_chat', chatId);
-
-    return () => unsubscribe();
   }, [chatId, profile]);
 
   // Scroll to bottom
@@ -104,17 +101,12 @@ const Chat: React.FC = () => {
       createdAt: new Date().toISOString()
     };
 
-    const path = `chats/${chatId}/messages`;
     try {
-      // Save to Firestore
-      await addDoc(collection(db, 'chats', chatId, 'messages'), messageData);
-      
-      // Emit via Socket.io
+      await socialApi.sendMessage(messageData);
       socketRef.current?.emit('send_message', messageData);
-      
       setNewMessage('');
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, path);
+      console.error('Error sending message:', err);
     }
   };
 

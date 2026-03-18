@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { UserProfile } from '../types';
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 
 interface ChatContextType {
   activeChatId: string | null;
@@ -22,16 +20,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode, currentUserId?:
     if (!currentUserId) return;
     const chatId = [currentUserId, otherUser.uid].sort().join('_');
     
-    // Ensure chat document exists
-    try {
-      await setDoc(doc(db, 'chats', chatId), {
-        participants: [currentUserId, otherUser.uid],
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    } catch (err) {
-      console.error("Error creating chat document:", err);
-    }
-
     setActiveChatId(chatId);
     setActiveOtherUser(otherUser);
     setIsOverlayOpen(true);
@@ -39,7 +27,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode, currentUserId?:
 
   const closeChat = useCallback(() => {
     setIsOverlayOpen(false);
-    // We keep the activeChatId so it's ready if reopened, but we could clear it
   }, []);
 
   return (

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile } from '../types';
-import { Heart, MessageCircle, User, MapPin, ChevronRight } from 'lucide-react';
+import { Heart, MessageCircle, User, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { socialApi } from '../api';
 
 const Matches: React.FC = () => {
   const { profile } = useAuth();
@@ -20,8 +19,7 @@ const Matches: React.FC = () => {
       try {
         const matchIds = profile.matches || [];
         const matchData = await Promise.all(matchIds.map(async (id) => {
-          const snap = await getDoc(doc(db, 'users', id));
-          return { uid: snap.id, ...snap.data() } as UserProfile;
+          return await socialApi.getUserProfile(id);
         }));
         setMatches(matchData);
       } catch (err) {

@@ -1,6 +1,3 @@
-import { doc, updateDoc, increment, addDoc, collection } from 'firebase/firestore';
-import { db } from '../firebase';
-
 export const POINT_VALUES = {
   POST: 10,
   COMMENT: 5,
@@ -9,12 +6,14 @@ export const POINT_VALUES = {
 };
 
 export const accumulatePoints = async (userId: string, type: keyof typeof POINT_VALUES) => {
-  const points = POINT_VALUES[type];
-  const userRef = doc(db, 'users', userId);
-  
   try {
-    await updateDoc(userRef, {
-      points: increment(points)
+    await fetch('/api/wallet/accumulate-points', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({ type })
     });
   } catch (error) {
     console.error('Error accumulating points:', error);
@@ -31,22 +30,14 @@ export const createTransaction = async (
   status: TransactionStatus = TransactionStatus.COMPLETED
 ) => {
   try {
-    await addDoc(collection(db, 'transactions'), {
-      userId,
-      amount,
-      type,
-      status,
-      description,
-      createdAt: new Date().toISOString()
+    await fetch('/api/transactions', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({ amount, type, description, status })
     });
-    
-    if (status === TransactionStatus.COMPLETED) {
-      const userRef = doc(db, 'users', userId);
-      // For payments or withdrawals, amount should be negative
-      await updateDoc(userRef, {
-        walletBalance: increment(amount)
-      });
-    }
   } catch (error) {
     console.error('Error creating transaction:', error);
   }

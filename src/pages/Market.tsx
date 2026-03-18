@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, deleteDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Product } from '../types';
 import { ShoppingBag, Plus, X, Tag, Trash2, Bookmark, BookmarkCheck, Camera } from 'lucide-react';
@@ -20,13 +18,18 @@ const Market: React.FC = () => {
   });
 
   useEffect(() => {
-    const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'products');
-    });
-    return () => unsubscribe();
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch('/api/products');
+        if (response.ok) {
+          const data = await response.json();
+          setProducts(data);
+        }
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      }
+    };
+    fetchProducts();
   }, []);
 
   const handleAddProduct = async (e: React.FormEvent) => {
@@ -34,26 +37,40 @@ const Market: React.FC = () => {
     if (!profile || !newProduct.title.trim()) return;
 
     try {
-      await addDoc(collection(db, 'products'), {
-        userId: profile.uid,
-        authorName: profile.name,
-        ...newProduct,
-        price: parseFloat(newProduct.price),
-        createdAt: new Date().toISOString()
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          ...newProduct,
+          price: parseFloat(newProduct.price)
+        })
       });
-      setIsAdding(false);
-      setNewProduct({ title: '', description: '', price: '', image: '', category: 'Other' });
+      if (response.ok) {
+        const addedProduct = await response.json();
+        setProducts(prev => [addedProduct, ...prev]);
+        setIsAdding(false);
+        setNewProduct({ title: '', description: '', price: '', image: '', category: 'Other' });
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'products');
+      console.error('Error adding product:', err);
     }
   };
 
   const handleDelete = async (productId: string) => {
     if (!window.confirm("Delete this product?")) return;
     try {
-      await deleteDoc(doc(db, 'products', productId));
+      const response = await fetch(`/api/products/${productId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        setProducts(prev => prev.filter(p => p.id !== productId));
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `products/${productId}`);
+      console.error('Error deleting product:', err);
     }
   };
 
@@ -78,14 +95,18 @@ const Market: React.FC = () => {
   const handleSaveProduct = async (productId: string) => {
     if (!profile) return;
     const isSaved = profile.savedProducts?.includes(productId);
-    const userRef = doc(db, 'users', profile.uid);
 
     try {
-      await updateDoc(userRef, {
-        savedProducts: isSaved ? arrayRemove(productId) : arrayUnion(productId)
+      const response = await fetch(`/api/products/${productId}/save`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
+      if (response.ok) {
+        // Update local profile state if needed, or re-fetch profile
+        window.location.reload();
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+      console.error('Error saving product:', err);
     }
   };
 

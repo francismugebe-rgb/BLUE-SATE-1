@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
 import { Heart, Mail, Lock, User, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { authApi } from '../api';
 
 const Register: React.FC = () => {
+  const { login } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,68 +18,11 @@ const Register: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Create user profile in Firestore
-      const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || 'francismugebe@gmail.com').toLowerCase();
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        name,
-        email,
-        role: email.toLowerCase() === adminEmail ? 'admin' : 'user',
-        createdAt: new Date().toISOString(),
-        interests: [],
-        photos: [`https://picsum.photos/seed/${user.uid}/400/400`],
-        matches: [],
-        likes: [],
-        dislikes: [],
-        followers: [],
-        following: []
-      });
-
+      const data = await authApi.register({ email, password, name });
+      login(data.token, data.user);
       navigate('/discover');
     } catch (err: any) {
-      if (err.code === 'auth/operation-not-allowed') {
-        setError('Email/Password registration is not enabled in Firebase. Please enable it in the Firebase Console or use Google Login.');
-      } else {
-        setError(err.message || 'Failed to create account');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      // Check if user profile exists
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (!userDoc.exists()) {
-        const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || 'francismugebe@gmail.com').toLowerCase();
-        await setDoc(doc(db, 'users', user.uid), {
-          uid: user.uid,
-          name: user.displayName || 'Anonymous',
-          email: user.email || '',
-          role: user.email?.toLowerCase() === adminEmail ? 'admin' : 'user',
-          createdAt: new Date().toISOString(),
-          interests: [],
-          photos: [user.photoURL || `https://picsum.photos/seed/${user.uid}/400/400`],
-          matches: [],
-          likes: [],
-          dislikes: [],
-          followers: [],
-          following: []
-        });
-      }
-      navigate('/discover');
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign in with Google');
+      setError(err.message || 'Failed to create account');
     } finally {
       setLoading(false);
     }
@@ -159,26 +102,6 @@ const Register: React.FC = () => {
             {loading ? 'Creating account...' : 'Create Account'}
           </button>
         </form>
-
-        <div className="mt-6">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-slate-500 font-medium">Or continue with</span>
-            </div>
-          </div>
-
-          <button
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="mt-6 w-full bg-white border border-slate-200 text-slate-700 py-4 rounded-2xl font-bold text-lg hover:bg-slate-50 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-          >
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-6 h-6" alt="Google" />
-            Google
-          </button>
-        </div>
 
         <p className="text-center mt-8 text-slate-600 font-medium">
           Already have an account? <Link to="/login" className="text-[#ff3366] font-bold hover:underline">Sign In</Link>

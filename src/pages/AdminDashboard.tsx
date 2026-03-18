@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Post, Report, Advert } from '../types';
 import { Users, FileText, AlertTriangle, BarChart3, Trash2, Ban, CheckCircle, ShieldCheck, BadgeCheck, Star, Trophy, Edit3, Heart, MessageCircle, Settings, Megaphone, Code, Flag, Check, X, DollarSign, Eye, MousePointer2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
-import { collection, getDocs, query, limit, orderBy, doc, updateDoc, deleteDoc, onSnapshot, setDoc, where, increment, getDoc } from 'firebase/firestore';
-import { createTransaction } from '../services/pointService';
 import { TransactionType } from '../types';
 
 const AdminDashboard: React.FC = () => {
@@ -24,12 +21,13 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const snap = await getDoc(doc(db, 'settings', 'site'));
-        if (snap.exists()) {
-          setSiteSettings(snap.data() as any);
+        const response = await fetch('/api/settings/site');
+        if (response.ok) {
+          const data = await response.json();
+          setSiteSettings(data);
         }
       } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'settings/site');
+        console.error('Error fetching settings:', error);
       }
     };
     fetchSettings();
@@ -37,10 +35,19 @@ const AdminDashboard: React.FC = () => {
 
   const handleSaveSettings = async () => {
     try {
-      await setDoc(doc(db, 'settings', 'site'), siteSettings);
-      alert('Settings saved successfully!');
+      const response = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(siteSettings)
+      });
+      if (response.ok) {
+        alert('Settings saved successfully!');
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'settings/site');
+      console.error('Error saving settings:', err);
     }
   };
 
@@ -48,17 +55,19 @@ const AdminDashboard: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const usersSnap = await getDocs(query(collection(db, 'users'), limit(50)));
-        const postsSnap = await getDocs(query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(50)));
-        const reportsSnap = await getDocs(query(collection(db, 'reports'), orderBy('createdAt', 'desc'), limit(50)));
-        const advertsSnap = await getDocs(query(collection(db, 'adverts'), orderBy('createdAt', 'desc'), limit(50)));
-        
-        setUsers(usersSnap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
-        setPosts(postsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Post)));
-        setReports(reportsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Report)));
-        setAdverts(advertsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Advert)));
+        const [usersRes, postsRes, reportsRes, advertsRes] = await Promise.all([
+          fetch('/api/admin/users', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+          fetch('/api/admin/posts', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+          fetch('/api/admin/reports', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+          fetch('/api/admin/adverts', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+        ]);
+
+        if (usersRes.ok) setUsers(await usersRes.json());
+        if (postsRes.ok) setPosts(await postsRes.json());
+        if (reportsRes.ok) setReports(await reportsRes.json());
+        if (advertsRes.ok) setAdverts(await advertsRes.json());
       } catch (err) {
-        handleFirestoreError(err, OperationType.GET, 'admin_dashboard_fetch');
+        console.error('Error fetching admin data:', err);
       } finally {
         setLoading(false);
       }
@@ -69,45 +78,70 @@ const AdminDashboard: React.FC = () => {
   const handlePromote = async (userId: string) => {
     if (!window.confirm("Are you sure you want to promote this user to admin?")) return;
     try {
-      await updateDoc(doc(db, 'users', userId), { role: 'admin' });
-      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, role: 'admin' } : u));
-      alert("User promoted to admin successfully!");
+      const response = await fetch(`/api/admin/users/${userId}/promote`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        setUsers(prev => prev.map(u => u.uid === userId ? { ...u, role: 'admin' } : u));
+        alert("User promoted to admin successfully!");
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+      console.error('Error promoting user:', err);
     }
   };
 
   const handleDeletePost = async (postId: string) => {
     if (!window.confirm("Are you sure you want to delete this post?")) return;
     try {
-      await deleteDoc(doc(db, 'posts', postId));
-      setPosts(prev => prev.filter(p => p.id !== postId));
+      const response = await fetch(`/api/admin/posts/${postId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        setPosts(prev => prev.filter(p => p.id !== postId));
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `posts/${postId}`);
+      console.error('Error deleting post:', err);
     }
   };
 
   const handleVerifyUser = async (userId: string, approve: boolean) => {
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        isVerified: approve,
-        isVerifiedPending: false
+      const response = await fetch(`/api/admin/users/${userId}/verify`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ approve })
       });
-      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, isVerified: approve, isVerifiedPending: false } : u));
-      alert(`User verification ${approve ? 'approved' : 'rejected'}`);
+      if (response.ok) {
+        setUsers(prev => prev.map(u => u.uid === userId ? { ...u, isVerified: approve, isVerifiedPending: false } : u));
+        alert(`User verification ${approve ? 'approved' : 'rejected'}`);
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+      console.error('Error verifying user:', err);
     }
   };
 
   const handleBanUser = async (userId: string, ban: boolean) => {
     if (!window.confirm(`Are you sure you want to ${ban ? 'ban' : 'unban'} this user?`)) return;
     try {
-      await updateDoc(doc(db, 'users', userId), { isBanned: ban });
-      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, isBanned: ban } : u));
-      alert(`User ${ban ? 'banned' : 'unbanned'} successfully`);
+      const response = await fetch(`/api/admin/users/${userId}/ban`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ ban })
+      });
+      if (response.ok) {
+        setUsers(prev => prev.map(u => u.uid === userId ? { ...u, isBanned: ban } : u));
+        alert(`User ${ban ? 'banned' : 'unbanned'} successfully`);
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+      console.error('Error banning user:', err);
     }
   };
 
@@ -117,34 +151,54 @@ const AdminDashboard: React.FC = () => {
     const duration = parseInt(days);
     const until = duration > 0 ? new Date(Date.now() + duration * 24 * 60 * 60 * 1000).toISOString() : null;
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        isSuspended: duration > 0,
-        suspensionUntil: until
+      const response = await fetch(`/api/admin/users/${userId}/suspend`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ duration, until })
       });
-      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, isSuspended: duration > 0, suspensionUntil: until } : u));
-      alert(`User ${duration > 0 ? 'suspended' : 'unsuspended'} successfully`);
+      if (response.ok) {
+        setUsers(prev => prev.map(u => u.uid === userId ? { ...u, isSuspended: duration > 0, suspensionUntil: until } : u));
+        alert(`User ${duration > 0 ? 'suspended' : 'unsuspended'} successfully`);
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+      console.error('Error suspending user:', err);
     }
   };
 
   const handleResolveReport = async (reportId: string) => {
     try {
-      await updateDoc(doc(db, 'reports', reportId), { status: 'resolved' });
-      setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: 'resolved' } : r));
-      alert("Report marked as resolved");
+      const response = await fetch(`/api/admin/reports/${reportId}/resolve`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: 'resolved' } : r));
+        alert("Report marked as resolved");
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `reports/${reportId}`);
+      console.error('Error resolving report:', err);
     }
   };
 
   const handleApproveAdvert = async (advertId: string, approve: boolean) => {
     try {
-      await updateDoc(doc(db, 'adverts', advertId), { status: approve ? 'active' : 'rejected' });
-      setAdverts(prev => prev.map(a => a.id === advertId ? { ...a, status: approve ? 'active' : 'rejected' } : a));
-      alert(`Advert ${approve ? 'approved' : 'rejected'}`);
+      const response = await fetch(`/api/admin/adverts/${advertId}/approve`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ approve })
+      });
+      if (response.ok) {
+        setAdverts(prev => prev.map(a => a.id === advertId ? { ...a, status: approve ? 'active' : 'rejected' } : a));
+        alert(`Advert ${approve ? 'approved' : 'rejected'}`);
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `adverts/${advertId}`);
+      console.error('Error approving advert:', err);
     }
   };
 
@@ -155,10 +209,19 @@ const AdminDashboard: React.FC = () => {
     if (isNaN(amount) || amount <= 0) return;
 
     try {
-      await createTransaction(userId, amount, TransactionType.DEPOSIT, 'Admin Funding');
-      alert(`Successfully funded user account with $${amount}`);
+      const response = await fetch(`/api/admin/users/${userId}/fund`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ amount })
+      });
+      if (response.ok) {
+        alert(`Successfully funded user account with $${amount}`);
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+      console.error('Error funding user:', err);
     }
   };
 

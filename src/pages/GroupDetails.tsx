@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, arrayUnion, arrayRemove, collection, addDoc, query, where, orderBy } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Group, Post } from '../types';
 import { Users, Globe, Lock, Shield, ArrowLeft, Image as ImageIcon, Send, MoreHorizontal, Heart, MessageSquare } from 'lucide-react';
@@ -19,60 +17,50 @@ const GroupDetails: React.FC = () => {
   useEffect(() => {
     if (!id) return;
 
-    const unsubGroup = onSnapshot(doc(db, 'groups', id), (doc) => {
-      if (doc.exists()) {
-        setGroup({ id: doc.id, ...doc.data() } as Group);
+    const fetchGroupDetails = async () => {
+      try {
+        const response = await fetch(`/api/groups/${id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setGroup(data);
+        }
+      } catch (error) {
+        console.error('Error fetching group details:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.GET, `groups/${id}`);
-      setLoading(false);
-    });
-
-    const postsQuery = query(
-      collection(db, 'posts'),
-      where('groupId', '==', id),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubPosts = onSnapshot(postsQuery, (snap) => {
-      setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Post)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'posts');
-    });
-
-    return () => {
-      unsubGroup();
-      unsubPosts();
     };
+
+    const fetchGroupPosts = async () => {
+      try {
+        const response = await fetch(`/api/posts?groupId=${id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setPosts(data);
+        }
+      } catch (error) {
+        console.error('Error fetching group posts:', error);
+      }
+    };
+
+    fetchGroupDetails();
+    fetchGroupPosts();
   }, [id]);
 
   const handleJoin = async () => {
     if (!authUser || !group) return;
-    const isMember = group.members.includes(authUser.uid);
-    const groupRef = doc(db, 'groups', group.id);
 
     try {
-      if (isMember) {
-        await updateDoc(groupRef, { members: arrayRemove(authUser.uid) });
-      } else {
-        await updateDoc(groupRef, { members: arrayUnion(authUser.uid) });
-        // Notify owner
-        if (group.ownerId !== authUser.uid) {
-          await addDoc(collection(db, 'notifications'), {
-            receiverId: group.ownerId,
-            senderId: authUser.uid,
-            senderName: profile?.name || 'Someone',
-            type: 'group_join',
-            targetId: group.id,
-            targetName: group.title,
-            read: false,
-            createdAt: new Date().toISOString()
-          });
-        }
+      const response = await fetch(`/api/groups/${group.id}/join`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const updatedGroup = await response.json();
+        setGroup(updatedGroup);
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'groups');
+      console.error('Error joining group:', err);
     }
   };
 
@@ -81,20 +69,24 @@ const GroupDetails: React.FC = () => {
     if (!authUser || !group || !newPost.trim()) return;
 
     try {
-      await addDoc(collection(db, 'posts'), {
-        userId: authUser.uid,
-        groupId: group.id,
-        authorName: profile?.name || 'Anonymous',
-        authorPhoto: profile?.photos?.[0],
-        content: newPost,
-        likes: [],
-        comments: [],
-        views: 0,
-        createdAt: new Date().toISOString()
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          groupId: group.id,
+          content: newPost
+        })
       });
-      setNewPost('');
+      if (response.ok) {
+        const addedPost = await response.json();
+        setPosts(prev => [addedPost, ...prev]);
+        setNewPost('');
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'posts');
+      console.error('Error creating post:', err);
     }
   };
 

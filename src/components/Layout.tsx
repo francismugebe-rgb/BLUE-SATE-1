@@ -3,7 +3,6 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Heart, MessageCircle, User, Compass, LayoutGrid, Settings, LogOut, ShieldCheck, PlayCircle, ShoppingBag, Wallet, Flag, Users, ChevronDown, BadgeCheck, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { auth } from '../firebase';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -12,7 +11,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ admin }) => {
-  const { profile, isAdmin } = useAuth();
+  const { profile, isAdmin, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -30,7 +29,7 @@ const Layout: React.FC<LayoutProps> = ({ admin }) => {
   }, []);
 
   const handleLogout = async () => {
-    await auth.signOut();
+    logout();
     navigate('/');
   };
 

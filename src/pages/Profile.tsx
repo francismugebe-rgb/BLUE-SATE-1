@@ -1,18 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, collection, query, where, getDocs, onSnapshot, orderBy, limit } from 'firebase/firestore';
-import { db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { UserProfile, Post, Reel } from '../types';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { User, MapPin, Briefcase, Ruler, Heart, Edit3, Camera, Check, UserPlus, UserMinus, ShieldCheck, BadgeCheck, Star, Trophy, Image as ImageIcon, Video, Grid, Users as UsersIcon, Info, Play, Globe, CreditCard, Zap, Search, MessageCircle, Hand, Sun, Moon, Loader2, Share2, Send, ExternalLink, MessageSquare, X } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { INTERESTS_LIST, RELATIONSHIP_STATUS_LIST, COUNTRIES, GENDERS } from '../constants';
-import { cn, fileToBase64, validateFile } from '../lib/utils';
-import { createTransaction, accumulatePoints } from '../services/pointService';
+import { cn } from '../lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-import { TransactionType } from '../types';
+import { socialApi } from '../api';
 
 const EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
@@ -45,60 +41,72 @@ const Profile: React.FC = () => {
 
   const isOwnProfile = !id || id === authUser?.uid;
   const canEdit = isOwnProfile || isAdmin;
+  const isFollowing = friends.some(f => f.uid === authUser?.uid);
 
   useEffect(() => {
     if (!targetProfile?.uid) return;
 
-    // Fetch user posts
-    const postsQuery = query(collection(db, 'posts'), where('userId', '==', targetProfile.uid), orderBy('createdAt', 'desc'));
-    const unsubPosts = onSnapshot(postsQuery, (snap) => {
-      setUserPosts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Post)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'posts');
-    });
-
-    // Fetch user reels
-    const reelsQuery = query(collection(db, 'reels'), where('userId', '==', targetProfile.uid), orderBy('createdAt', 'desc'));
-    const unsubReels = onSnapshot(reelsQuery, (snap) => {
-      setUserReels(snap.docs.map(d => ({ id: d.id, ...d.data() } as Reel)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'reels');
-    });
-
-    // Fetch friends (followers for now)
-    const fetchFriends = async () => {
-      if (!targetProfile.followers?.length) {
-        setFriends([]);
-        setFriendCount(0);
-        return;
+    const fetchUserData = async () => {
+      try {
+        const posts = await socialApi.getPosts();
+        setUserPosts(posts.filter((p: Post) => p.userId === targetProfile.uid));
+        
+        const response = await fetch(`/api/users/${targetProfile.uid}/followers`);
+        if (response.ok) {
+          const followers = await response.json();
+          setFriends(followers);
+          setFriendCount(followers.length);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
       }
-      const friendsQuery = query(collection(db, 'users'), where('uid', 'in', targetProfile.followers.slice(0, 10)));
-      const snap = await getDocs(friendsQuery);
-      setFriends(snap.docs.map(d => d.data() as UserProfile));
-      setFriendCount(targetProfile.followers.length);
     };
-    fetchFriends();
-
-    return () => {
-      unsubPosts();
-      unsubReels();
-    };
-  }, [targetProfile?.uid, targetProfile?.followers]);
+    fetchUserData();
+  }, [targetProfile?.uid]);
 
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
-      if (isOwnProfile) {
-        setTargetProfile(profile);
-        setEditedData(profile || {});
-      } else if (id) {
-        const snap = await getDoc(doc(db, 'users', id));
-        if (snap.exists()) setTargetProfile(snap.data() as UserProfile);
+      try {
+        if (isOwnProfile && profile) {
+          setTargetProfile(profile);
+          setEditedData(profile || {});
+        } else if (id) {
+          const data = await socialApi.getUserProfile(id);
+          setTargetProfile(data);
+          setEditedData(data || {});
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchProfile();
   }, [id, profile, isOwnProfile]);
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  const validateFile = (file: File, type: 'image' | 'video') => {
+    const maxSize = type === 'image' ? 5 * 1024 * 1024 : 50 * 1024 * 1024; // 5MB for image, 50MB for video
+    if (file.size > maxSize) {
+      return { valid: false, error: `File size exceeds ${maxSize / (1024 * 1024)}MB limit.` };
+    }
+    if (type === 'image' && !file.type.startsWith('image/')) {
+      return { valid: false, error: 'Please select an image file.' };
+    }
+    if (type === 'video' && !file.type.startsWith('video/')) {
+      return { valid: false, error: 'Please select a video file.' };
+    }
+    return { valid: true };
+  };
 
   const getVideoDuration = (file: File): Promise<number> => {
     return new Promise((resolve) => {
@@ -136,86 +144,25 @@ const Profile: React.FC = () => {
 
     try {
       let mediaUrl = null;
-      let isReel = false;
-
       if (postMedia) {
-        const fileName = `${Date.now()}_${postMedia.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const storageRef = ref(storage, `posts/${profile.uid}/${fileName}`);
-        
-        const uploadTask = uploadBytesResumable(storageRef, postMedia);
-        
-        const uploadPromise = new Promise<string>((resolve, reject) => {
-          console.log("Starting uploadPromise for Profile...");
-          uploadTask.on('state_changed', 
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              console.log(`Profile upload progress: ${progress}%`, snapshot.state);
-              setUploadProgress(progress);
-            },
-            (error) => {
-              console.error("Profile upload failed in on('state_changed'):", error);
-              reject(error);
-            },
-            async () => {
-              console.log("Profile upload task completed callback");
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadURL);
-            }
-          );
-        });
-
-        console.log("Awaiting Profile uploadPromise...");
-        mediaUrl = await uploadPromise;
-        console.log("Profile uploadPromise resolved");
-        setUploadProgress(100);
-
-        if (mediaType === 'video') {
-          const duration = await getVideoDuration(postMedia);
-          if (duration < 30) {
-            isReel = true;
-          }
-        }
+        const uploadRes = await socialApi.uploadFile(postMedia);
+        mediaUrl = uploadRes.url;
       }
 
-      if (isReel && mediaUrl) {
-        await addDoc(collection(db, 'reels'), {
-          userId: profile.uid,
-          authorName: profile.name,
-          authorPhoto: profile.photos?.[0] || '',
-          videoUrl: mediaUrl,
-          caption: newPostContent,
-          likes: [],
-          comments: [],
-          views: 0,
-          createdAt: new Date().toISOString()
-        });
-        alert('Short video added to Reels!');
-      } else {
-        await addDoc(collection(db, 'posts'), {
-          userId: profile.uid,
-          authorName: profile.name,
-          authorPhoto: profile.photos?.[0] || '',
-          isVerified: profile.isVerified || false,
-          content: newPostContent,
-          image: mediaType === 'image' ? mediaUrl : null,
-          video: mediaType === 'video' ? mediaUrl : null,
-          likes: [],
-          comments: [],
-          views: 0,
-          createdAt: new Date().toISOString()
-        });
-        alert('Post shared successfully!');
-      }
+      await socialApi.createPost({
+        content: newPostContent,
+        imageUrl: mediaUrl
+      });
+      alert('Post shared successfully!');
 
       setNewPostContent('');
       setPostMedia(null);
       setMediaType(null);
       setMediaPreview(null);
       setUploadProgress(null);
-      await accumulatePoints(profile.uid, 'POST');
-    } catch (err) {
-      console.error("Error creating post:", err);
-      alert('Failed to create post.');
+    } catch (error: any) {
+      console.error("Error creating post:", error);
+      alert(error.message || 'Failed to create post.');
     } finally {
       setIsPosting(false);
     }
@@ -224,57 +171,37 @@ const Profile: React.FC = () => {
   const handleSave = async () => {
     if (!authUser || !targetProfile) return;
     try {
-      await updateDoc(doc(db, 'users', targetProfile.uid), editedData);
+      await socialApi.updateProfile(editedData);
       setIsEditing(false);
       setUploadSuccess(null);
       alert('Profile saved successfully!');
       if (!isOwnProfile) {
-        // If admin edited, refresh target profile
-        const snap = await getDoc(doc(db, 'users', targetProfile.uid));
-        if (snap.exists()) setTargetProfile(snap.data() as UserProfile);
+        const data = await socialApi.getUserProfile(targetProfile.uid);
+        setTargetProfile(data);
       }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${targetProfile.uid}`);
+    } catch (error: any) {
+      console.error("Error saving profile:", error);
+      alert(error.message || 'Failed to save profile.');
     }
   };
 
   const handleFollow = async () => {
     if (!profile || !targetProfile || isOwnProfile) return;
-    
-    const isFollowing = profile.following?.includes(targetProfile.uid);
-    const myRef = doc(db, 'users', profile.uid);
-    const theirRef = doc(db, 'users', targetProfile.uid);
-
     try {
-      if (isFollowing) {
-        await updateDoc(myRef, {
-          following: profile.following?.filter(id => id !== targetProfile.uid)
-        });
-        await updateDoc(theirRef, {
-          followers: targetProfile.followers?.filter(id => id !== profile.uid)
-        });
-        setTargetProfile(prev => prev ? { ...prev, followers: prev.followers?.filter(id => id !== profile.uid) } : null);
-      } else {
-        await updateDoc(myRef, {
-          following: arrayUnion(targetProfile.uid)
-        });
-        await updateDoc(theirRef, {
-          followers: arrayUnion(profile.uid)
-        });
-        setTargetProfile(prev => prev ? { ...prev, followers: [...(prev.followers || []), profile.uid] } : null);
-
-        // Notify them
-        await addDoc(collection(db, 'notifications'), {
-          receiverId: targetProfile.uid,
-          senderId: profile.uid,
-          senderName: profile.name,
-          type: 'follow',
-          read: false,
-          createdAt: new Date().toISOString()
-        });
+      await socialApi.followUser(targetProfile.uid);
+      const data = await socialApi.getUserProfile(targetProfile.uid);
+      setTargetProfile(data);
+      
+      // Refresh followers list
+      const response = await fetch(`/api/users/${targetProfile.uid}/followers`);
+      if (response.ok) {
+        const followers = await response.json();
+        setFriends(followers);
+        setFriendCount(followers.length);
       }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'users');
+    } catch (error: any) {
+      console.error("Error following/unfollowing:", error);
+      alert(error.message || 'Failed to follow/unfollow.');
     }
   };
 
@@ -326,15 +253,13 @@ const Profile: React.FC = () => {
           ? { photos: [newPhoto, ...(targetProfile.photos?.slice(1) || [])] }
           : { coverPhoto: newPhoto };
         
-        await updateDoc(doc(db, 'users', targetProfile.uid), updateObj);
+        await socialApi.updateProfile(updateObj);
         
-        if (isOwnProfile) {
-          // Profile will update via onSnapshot in AuthContext
-        } else {
-          setTargetProfile({ ...targetProfile, ...updateObj });
-        }
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${targetProfile.uid}`);
+        setTargetProfile({ ...targetProfile, ...updateObj });
+        alert('Photo updated successfully!');
+      } catch (error: any) {
+        console.error("Error updating photo:", error);
+        alert(error.message || 'Failed to update photo.');
       }
     }
   };
@@ -349,7 +274,7 @@ const Profile: React.FC = () => {
 
   const handleUpgradeProfile = async () => {
     if (!profile) return;
-    const cost = 500; // Example cost in points
+    const cost = 500;
     if (profile.points < cost) {
       alert(`You need ${cost} points to upgrade your profile. You have ${profile.points}.`);
       return;
@@ -357,18 +282,18 @@ const Profile: React.FC = () => {
 
     if (confirm(`Upgrade to Premium for ${cost} points?`)) {
       try {
-        await createTransaction(profile.uid, -cost, TransactionType.PAYMENT, 'Profile Upgrade to Premium');
-        await updateDoc(doc(db, 'users', profile.uid), { isPremium: true });
+        await socialApi.updateProfile({ isPremium: true });
         alert('Profile upgraded to Premium!');
-      } catch (err) {
-        alert('Failed to upgrade profile.');
+      } catch (error: any) {
+        console.error("Error upgrading profile:", error);
+        alert(error.message || 'Failed to upgrade profile.');
       }
     }
   };
 
   const handleRequestVerification = async () => {
     if (!profile) return;
-    const cost = 1000; // Example cost in points
+    const cost = 1000;
     if (profile.points < cost) {
       alert(`You need ${cost} points for verification. You have ${profile.points}.`);
       return;
@@ -376,11 +301,11 @@ const Profile: React.FC = () => {
 
     if (confirm(`Request verification for ${cost} points?`)) {
       try {
-        await createTransaction(profile.uid, -cost, TransactionType.PAYMENT, 'Verification Request');
-        await updateDoc(doc(db, 'users', profile.uid), { isVerifiedPending: true });
+        await socialApi.updateProfile({ isVerifiedPending: true });
         alert('Verification request submitted!');
-      } catch (err) {
-        alert('Failed to submit request.');
+      } catch (error: any) {
+        console.error("Error requesting verification:", error);
+        alert(error.message || 'Failed to submit request.');
       }
     }
   };
@@ -388,25 +313,21 @@ const Profile: React.FC = () => {
   const handleWave = async () => {
     if (!profile || !targetProfile) return;
     try {
-      const chatId = [profile.uid, targetProfile.uid].sort().join('_');
-      await addDoc(collection(db, 'chats', chatId, 'messages'), {
-        chatId,
-        senderId: profile.uid,
+      await socialApi.sendMessage({
         receiverId: targetProfile.uid,
-        text: '👋 Waved at you!',
-        read: false,
-        createdAt: new Date().toISOString()
+        text: '👋 Waved at you!'
       });
       openChat(targetProfile);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'wave');
+    } catch (error: any) {
+      console.error("Error waving:", error);
+      alert(error.message || 'Failed to wave.');
     }
   };
+
   const handleMatch = async () => {
     if (!profile) return;
     setIsMatching(true);
     try {
-      // Strict Male/Female matching
       let targetGender = '';
       if (profile.gender === 'Male') {
         targetGender = 'Female';
@@ -418,27 +339,20 @@ const Profile: React.FC = () => {
         return;
       }
 
-      const q = query(
-        collection(db, 'users'),
-        where('gender', '==', targetGender),
-        limit(50)
-      );
-      const snap = await getDocs(q);
-      const matches = snap.docs
-        .map(d => d.data() as UserProfile)
-        .filter(u => u.uid !== profile.uid)
-        .filter(u => u.name && u.photos?.length && u.bio && u.city && u.country); // Profile completeness check
-      
-      if (matches.length === 0) {
-        alert("No match available at the moment. Please try again later!");
-        setMatchingUsers([]);
-      } else {
-        setMatchingUsers(matches.slice(0, 10));
-        setActiveTab('friends'); 
-        alert(`Found ${matches.length} potential matches with complete profiles!`);
+      const response = await fetch(`/api/users/match?gender=${targetGender}`);
+      if (response.ok) {
+        const matches = await response.json();
+        if (matches.length === 0) {
+          alert("No match available at the moment. Please try again later!");
+          setMatchingUsers([]);
+        } else {
+          setMatchingUsers(matches.slice(0, 10));
+          setActiveTab('friends'); 
+          alert(`Found ${matches.length} potential matches!`);
+        }
       }
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error("Error matching:", error);
       alert("An error occurred while searching for matches.");
     } finally {
       setIsMatching(false);
@@ -447,74 +361,29 @@ const Profile: React.FC = () => {
 
   const handleLike = async (postId: string, emoji: string = '❤️') => {
     if (!profile) return;
-    const postRef = doc(db, 'posts', postId);
-    const post = userPosts.find(p => p.id === postId);
-    if (!post) return;
-
-    const existingLike = post.likes.find(l => l.userId === profile.uid);
-    
     try {
-      if (existingLike) {
-        if (existingLike.emoji === emoji) {
-          await updateDoc(postRef, { likes: arrayRemove(existingLike) });
-        } else {
-          await updateDoc(postRef, { likes: arrayRemove(existingLike) });
-          await updateDoc(postRef, { likes: arrayUnion({ userId: profile.uid, emoji }) });
-        }
-      } else {
-        await updateDoc(postRef, { likes: arrayUnion({ userId: profile.uid, emoji }) });
-        await accumulatePoints(profile.uid, 'LIKE');
-        
-        if (post.userId !== profile.uid) {
-          await addDoc(collection(db, 'notifications'), {
-            receiverId: post.userId,
-            senderId: profile.uid,
-            senderName: profile.name,
-            type: 'like',
-            targetId: postId,
-            read: false,
-            createdAt: new Date().toISOString()
-          });
-        }
-      }
+      await socialApi.likePost(postId, emoji);
       setShowEmojiPicker(null);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `posts/${postId}`);
+      // Refresh posts
+      const posts = await socialApi.getPosts();
+      setUserPosts(posts.filter((p: Post) => p.userId === targetProfile?.uid));
+    } catch (error: any) {
+      console.error("Error liking post:", error);
+      alert(error.message || 'Failed to like post.');
     }
   };
 
   const handleComment = async (postId: string) => {
     if (!profile || !commentText[postId]?.trim()) return;
-    const postRef = doc(db, 'posts', postId);
-    const newComment = {
-      userId: profile.uid,
-      userName: profile.name,
-      comment: commentText[postId],
-      createdAt: new Date().toISOString()
-    };
-
     try {
-      await updateDoc(postRef, {
-        comments: arrayUnion(newComment)
-      });
-      await accumulatePoints(profile.uid, 'COMMENT');
-      
-      const post = userPosts.find(p => p.id === postId);
-      if (post && post.userId !== profile.uid) {
-        await addDoc(collection(db, 'notifications'), {
-          receiverId: post.userId,
-          senderId: profile.uid,
-          senderName: profile.name,
-          type: 'comment',
-          targetId: postId,
-          read: false,
-          createdAt: new Date().toISOString()
-        });
-      }
-
+      await socialApi.commentPost(postId, commentText[postId]);
       setCommentText(prev => ({ ...prev, [postId]: '' }));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `posts/${postId}`);
+      // Refresh posts
+      const posts = await socialApi.getPosts();
+      setUserPosts(posts.filter((p: Post) => p.userId === targetProfile?.uid));
+    } catch (error: any) {
+      console.error("Error adding comment:", error);
+      alert(error.message || 'Failed to add comment.');
     }
   };
 
@@ -649,23 +518,23 @@ const Profile: React.FC = () => {
                 {!isOwnProfile && (
                   <>
                     <button 
-                      onClick={handleFollow}
-                      className={cn(
-                        "px-3 py-2 md:px-6 md:py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg text-xs md:text-base",
-                        profile?.following?.includes(targetProfile.uid) 
-                          ? "bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border-color)]" 
-                          : "bg-[#1877f2] text-white hover:bg-[#166fe5]"
-                      )}
-                    >
-                      {profile?.following?.includes(targetProfile.uid) ? <UserMinus className="w-4 h-4 md:w-5 md:h-5" /> : <UserPlus className="w-4 h-4 md:w-5 md:h-5" />}
-                      <span>{profile?.following?.includes(targetProfile.uid) ? 'Unfollow' : 'Follow'}</span>
-                    </button>
-                    <button 
                       onClick={() => openChat(targetProfile)}
                       className="bg-[#ff3366] text-white px-3 py-2 md:px-6 md:py-3 rounded-2xl font-bold hover:bg-[#e62e5c] transition-all flex items-center gap-2 shadow-lg shadow-[#ff3366]/20 text-xs md:text-base"
                     >
                       <MessageCircle className="w-4 h-4 md:w-5 md:h-5" />
                       <span>Message</span>
+                    </button>
+                    <button 
+                      onClick={handleFollow}
+                      className={cn(
+                        "px-3 py-2 md:px-6 md:py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg text-xs md:text-base",
+                        isFollowing 
+                          ? "bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border-color)]" 
+                          : "bg-[#1877f2] text-white hover:bg-[#166fe5]"
+                      )}
+                    >
+                      {isFollowing ? <UserMinus className="w-4 h-4 md:w-5 md:h-5" /> : <UserPlus className="w-4 h-4 md:w-5 md:h-5" />}
+                      <span>{isFollowing ? 'Unfollow' : 'Follow'}</span>
                     </button>
                   </>
                 )}

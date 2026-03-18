@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
-import { ref, uploadBytesResumable, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Reel } from '../types';
 import { Play, Heart, MessageCircle, Share2, Plus, X, Eye, Upload, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { formatDistanceToNow } from 'date-fns';
+import { socialApi } from '../api';
 
 const Reels: React.FC = () => {
   const { profile } = useAuth();
@@ -19,13 +17,18 @@ const Reels: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'reels'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setReels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reel)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'reels');
-    });
-    return () => unsubscribe();
+    const fetchReels = async () => {
+      try {
+        const response = await fetch('/api/reels');
+        if (response.ok) {
+          const data = await response.json();
+          setReels(data);
+        }
+      } catch (error) {
+        console.error("Error fetching reels:", error);
+      }
+    };
+    fetchReels();
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,57 +50,35 @@ const Reels: React.FC = () => {
     setIsUploading(true);
     setUploadProgress(0);
     
-    const fileName = `${Date.now()}_${videoFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-    const storageRef = ref(storage, `reels/${profile.uid}/${fileName}`);
-    
     try {
-      console.log("Starting upload for:", fileName, "Size:", videoFile.size);
+      const videoUrl = await socialApi.uploadFile(videoFile);
       
-      const uploadTask = uploadBytesResumable(storageRef, videoFile);
-      
-      uploadTask.on('state_changed', 
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log(`Upload progress: ${progress}%`, snapshot.state);
-          setUploadProgress(progress);
+      const response = await fetch('/api/reels', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        (error) => {
-          console.error("Upload failed in on('state_changed'):", error);
-          alert(`Upload failed: ${error.message}`);
-          setIsUploading(false);
-          setUploadProgress(null);
-        },
-        () => {
-          console.log("Upload task completed callback");
-        }
-      );
-
-      console.log("Awaiting uploadTask promise...");
-      await uploadTask;
-      console.log("uploadTask promise resolved");
-      
-      const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-      console.log("Got download URL:", downloadURL);
-
-      await addDoc(collection(db, 'reels'), {
-        userId: profile.uid,
-        authorName: profile.name,
-        authorPhoto: profile.photos?.[0] || '',
-        videoUrl: downloadURL,
-        caption,
-        likes: [],
-        comments: [],
-        views: 0,
-        createdAt: new Date().toISOString()
+        body: JSON.stringify({
+          videoUrl,
+          caption
+        })
       });
 
-      console.log("Firestore document created");
-      setIsAdding(false);
-      setVideoFile(null);
-      setCaption('');
-      setUploadProgress(null);
-      setIsUploading(false);
-      alert("Reel shared successfully!");
+      if (response.ok) {
+        setIsAdding(false);
+        setVideoFile(null);
+        setCaption('');
+        setUploadProgress(null);
+        setIsUploading(false);
+        alert("Reel shared successfully!");
+        // Refresh reels
+        const refreshResponse = await fetch('/api/reels');
+        if (refreshResponse.ok) {
+          const data = await refreshResponse.json();
+          setReels(data);
+        }
+      }
     } catch (err: any) {
       console.error("Error in handleAddReel:", err);
       alert(`Failed to share reel: ${err.message || 'Unknown error'}`);
@@ -108,20 +89,31 @@ const Reels: React.FC = () => {
 
   const handleLike = async (reel: Reel) => {
     if (!profile) return;
-    const reelRef = doc(db, 'reels', reel.id);
-    const isLiked = reel.likes.includes(profile.uid);
     try {
-      await updateDoc(reelRef, {
-        likes: isLiked ? arrayRemove(profile.uid) : arrayUnion(profile.uid)
+      const response = await fetch(`/api/reels/${reel.id}/like`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
       });
+      if (response.ok) {
+        // Refresh reels
+        const refreshResponse = await fetch('/api/reels');
+        if (refreshResponse.ok) {
+          const data = await refreshResponse.json();
+          setReels(data);
+        }
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `reels/${reel.id}`);
+      console.error("Error liking reel:", err);
     }
   };
 
   const handleView = async (reelId: string) => {
     try {
-      await updateDoc(doc(db, 'reels', reelId), { views: increment(1) });
+      await fetch(`/api/reels/${reelId}/view`, {
+        method: 'POST'
+      });
     } catch (err) {}
   };
 

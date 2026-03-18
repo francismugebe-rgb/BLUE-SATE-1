@@ -1,75 +1,80 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Transaction, TransactionType, TransactionStatus } from '../types';
+import { Transaction, TransactionType } from '../types';
 import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, DollarSign, Star, RefreshCw, CreditCard, History, Plus, Megaphone } from 'lucide-react';
 import { cn, formatCurrency, formatTime } from '../lib/utils';
-import { createTransaction } from '../services/pointService';
 
 const Wallet: React.FC = () => {
-  const { profile, user: authUser } = useAuth();
+  const { profile } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState('');
   const [pointValue, setPointValue] = useState(0.01);
 
   useEffect(() => {
-    if (!authUser) return;
+    const fetchData = async () => {
+      try {
+        const [txRes, settingsRes] = await Promise.all([
+          fetch('/api/transactions', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          }),
+          fetch('/api/settings/site')
+        ]);
 
-    const q = query(
-      collection(db, 'transactions'),
-      where('userId', '==', authUser.uid),
-      orderBy('createdAt', 'desc')
-    );
+        if (txRes.ok) {
+          const txData = await txRes.json();
+          setTransactions(txData);
+        }
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json();
+          setPointValue(settingsData.pointValue || 0.01);
+        }
+      } catch (err) {
+        console.error("Error fetching wallet data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const unsub = onSnapshot(q, (snap) => {
-      setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'transactions');
-      setLoading(false);
-    });
-
-    // Fetch point value from settings
-    getDoc(doc(db, 'settings', 'site')).then(snap => {
-      if (snap.exists()) setPointValue(snap.data().pointValue || 0.01);
-    });
-
-    return () => unsub();
-  }, [authUser]);
+    fetchData();
+  }, []);
 
   const handleDeposit = async () => {
-    if (!authUser || !amount) return;
+    if (!profile || !amount) return;
     const val = parseFloat(amount);
     if (isNaN(val) || val <= 0) return;
 
     try {
-      // 1. Create order on server
       const response = await fetch('/api/paypal/create-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({ amount: val.toFixed(2) }),
       });
       const order = await response.json();
 
       if (order.id) {
-        // In a real app, we'd use the PayPal JS SDK to show the buttons.
-        // For this demo, we'll simulate the capture after a "successful" payment.
-        // The user would normally click the PayPal button which opens a popup.
-        
-        const confirmPayment = confirm(`Simulate PayPal Payment for ${formatCurrency(val)}? (Order ID: ${order.id})`);
+        const confirmPayment = window.confirm(`Simulate PayPal Payment for ${formatCurrency(val)}? (Order ID: ${order.id})`);
         if (confirmPayment) {
           const captureResponse = await fetch('/api/paypal/capture-order', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
             body: JSON.stringify({ orderID: order.id }),
           });
           const captureData = await captureResponse.json();
 
           if (captureData.status === 'COMPLETED') {
-            await createTransaction(authUser.uid, val, TransactionType.DEPOSIT, 'PayPal');
             setAmount('');
+            // Refresh transactions
+            const txRes = await fetch('/api/transactions', {
+              headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (txRes.ok) setTransactions(await txRes.json());
             alert("Deposit successful!");
           } else {
             alert("Payment failed or was not completed.");
@@ -86,13 +91,22 @@ const Wallet: React.FC = () => {
     if (!profile || profile.points <= 0) return;
     
     const conversionValue = profile.points * pointValue;
-    if (confirm(`Convert ${profile.points} points to ${formatCurrency(conversionValue)}?`)) {
+    if (window.confirm(`Convert ${profile.points} points to ${formatCurrency(conversionValue)}?`)) {
       try {
-        await createTransaction(profile.uid, conversionValue, TransactionType.POINTS_CONVERSION, 'Points to Wallet');
-        await updateDoc(doc(db, 'users', profile.uid), { points: 0 });
-        alert("Points converted successfully!");
+        const response = await fetch('/api/wallet/convert-points', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (response.ok) {
+          alert("Points converted successfully!");
+          // Refresh data
+          window.location.reload();
+        }
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, 'users');
+        console.error("Error converting points:", err);
       }
     }
   };
@@ -102,7 +116,7 @@ const Wallet: React.FC = () => {
 
   const handleCreateAd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!authUser || !newAd.title || !newAd.link) return;
+    if (!profile || !newAd.title || !newAd.link) return;
     const budgetVal = parseFloat(newAd.budget);
     if (isNaN(budgetVal) || budgetVal > (profile?.walletBalance || 0)) {
       alert("Insufficient balance or invalid budget");
@@ -110,34 +124,27 @@ const Wallet: React.FC = () => {
     }
 
     try {
-      await addDoc(collection(db, 'adverts'), {
-        sponsorId: authUser.uid,
-        title: newAd.title,
-        link: newAd.link,
-        type: newAd.type,
-        budget: budgetVal,
-        spent: 0,
-        clicks: 0,
-        impressions: 0,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      });
-      
-      await createTransaction(authUser.uid, -budgetVal, TransactionType.PAYMENT, `Ad Sponsorship: ${newAd.title}`);
-      
-      // Shift level for sponsoring
-      const levels: ('Bronze' | 'Gold' | 'Platinum')[] = ['Bronze', 'Gold', 'Platinum'];
-      const currentIdx = levels.indexOf(profile?.level || 'Bronze');
-      const nextLevel = levels[Math.min(currentIdx + 1, levels.length - 1)];
-      
-      await updateDoc(doc(db, 'users', authUser.uid), { 
-        level: nextLevel 
+      const response = await fetch('/api/adverts', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          title: newAd.title,
+          link: newAd.link,
+          type: newAd.type,
+          budget: budgetVal
+        })
       });
 
-      setShowAdModal(false);
-      alert("Ad submitted for approval! Your level has been upgraded for sponsoring content.");
+      if (response.ok) {
+        setShowAdModal(false);
+        alert("Ad submitted for approval! Your level has been upgraded for sponsoring content.");
+        window.location.reload();
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'adverts');
+      console.error("Error creating ad:", err);
     }
   };
 

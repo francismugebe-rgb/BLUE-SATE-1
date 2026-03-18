@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, doc, updateDoc, getDocs, limit, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Chat, Message, UserProfile } from '../types';
 import { Send, Image as ImageIcon, Search, MoreVertical, Check, CheckCheck, MessageCircle } from 'lucide-react';
 import { cn, formatTime } from '../lib/utils';
+import { socialApi } from '../api';
+import { io, Socket } from 'socket.io-client';
 
 const Messages: React.FC = () => {
   const { profile, user: authUser } = useAuth();
@@ -15,74 +15,82 @@ const Messages: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [chatUsers, setChatUsers] = useState<Record<string, UserProfile>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     if (!authUser) return;
 
-    const chatsQuery = query(
-      collection(db, 'chats'),
-      where('participants', 'array-contains', authUser.uid),
-      orderBy('updatedAt', 'desc')
-    );
+    socketRef.current = io();
+    socketRef.current.emit('user_online', authUser.uid);
 
-    const unsub = onSnapshot(chatsQuery, async (snap) => {
-      const chatList = snap.docs.map(d => ({ id: d.id, ...d.data() } as Chat));
-      setChats(chatList);
-      
-      // Fetch user info for all participants
-      const uids = new Set<string>();
-      chatList.forEach(c => c.participants.forEach(p => uids.add(p)));
-      
-      const newUsers: Record<string, UserProfile> = { ...chatUsers };
-      const missingUids = Array.from(uids).filter(uid => !newUsers[uid]);
-      
-      if (missingUids.length > 0) {
-        // Fetch in batches of 10
-        for (let i = 0; i < missingUids.length; i += 10) {
-          const batch = missingUids.slice(i, i + 10);
-          const q = query(collection(db, 'users'), where('uid', 'in', batch));
-          const userSnap = await getDocs(q);
-          userSnap.docs.forEach(d => {
-            const u = d.data() as UserProfile;
-            newUsers[u.uid] = u;
-          });
+    const fetchChats = async () => {
+      try {
+        const chatList = await socialApi.getChats();
+        setChats(chatList);
+        
+        // Fetch user info for all participants
+        const uids = new Set<string>();
+        chatList.forEach((c: Chat) => c.participants.forEach((p: string) => uids.add(p)));
+        
+        const newUsers: Record<string, UserProfile> = { ...chatUsers };
+        const missingUids = Array.from(uids).filter(uid => !newUsers[uid]);
+        
+        if (missingUids.length > 0) {
+          for (const uid of missingUids) {
+            try {
+              const u = await socialApi.getUserProfile(uid);
+              newUsers[uid] = u;
+            } catch (err) {
+              console.error("Error fetching user profile:", err);
+            }
+          }
+          setChatUsers(newUsers);
         }
-        setChatUsers(newUsers);
+      } catch (error) {
+        console.error("Error fetching chats:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'chats');
-      setLoading(false);
+    };
+
+    fetchChats();
+
+    socketRef.current.on('receive_message', (data: Message) => {
+      setMessages(prev => {
+        if (data.chatId === activeChat?.id) {
+          return [...prev, data];
+        }
+        return prev;
+      });
+      
+      // Update last message in chats list
+      setChats(prev => prev.map(c => 
+        c.id === data.chatId 
+          ? { ...c, lastMessage: data.text, lastMessageAt: data.createdAt }
+          : c
+      ));
     });
 
-    return () => unsub();
-  }, [authUser]);
+    return () => {
+      socketRef.current?.disconnect();
+    };
+  }, [authUser, activeChat?.id]);
 
   useEffect(() => {
     if (!activeChat) return;
 
-    const messagesQuery = query(
-      collection(db, `chats/${activeChat.id}/messages`),
-      orderBy('createdAt', 'asc'),
-      limit(100)
-    );
+    const fetchMessages = async () => {
+      try {
+        const msgList = await socialApi.getMessages(activeChat.id);
+        setMessages(msgList);
+      } catch (error) {
+        console.error("Error fetching messages:", error);
+      }
+    };
 
-    const unsub = onSnapshot(messagesQuery, (snap) => {
-      const msgList = snap.docs.map(d => ({ id: d.id, ...d.data() } as Message));
-      setMessages(msgList);
-      
-      // Mark as read
-      msgList.forEach(m => {
-        if (m.receiverId === authUser?.uid && !m.read) {
-          updateDoc(doc(db, `chats/${activeChat.id}/messages`, m.id), { read: true });
-        }
-      });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `chats/${activeChat.id}/messages`);
-    });
-
-    return () => unsub();
-  }, [activeChat, authUser]);
+    fetchMessages();
+    socketRef.current?.emit('join_chat', activeChat.id);
+  }, [activeChat]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -105,15 +113,14 @@ const Messages: React.FC = () => {
     };
 
     try {
-      await addDoc(collection(db, `chats/${activeChat.id}/messages`), msgData);
-      await updateDoc(doc(db, 'chats', activeChat.id), {
-        lastMessage: newMessage,
-        lastMessageAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+      await socialApi.sendMessage({
+        receiverId,
+        text: newMessage
       });
+      socketRef.current?.emit('send_message', msgData);
       setNewMessage('');
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'messages');
+      console.error("Error sending message:", err);
     }
   };
 

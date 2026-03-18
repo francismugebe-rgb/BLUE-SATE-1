@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Group } from '../types';
 import { Link } from 'react-router-dom';
@@ -15,68 +13,62 @@ const Groups: React.FC = () => {
   const [newGroup, setNewGroup] = useState({ title: '', description: '', privacy: 'public' });
 
   useEffect(() => {
-    const q = query(collection(db, 'groups'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() } as Group)));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'groups');
-      setLoading(false);
-    });
-    return () => unsub();
+    const fetchGroups = async () => {
+      try {
+        const response = await fetch('/api/groups');
+        if (response.ok) {
+          const data = await response.json();
+          setGroups(data);
+        }
+      } catch (error) {
+        console.error('Error fetching groups:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGroups();
   }, []);
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authUser || !newGroup.title.trim()) return;
 
-    const groupData = {
-      ownerId: authUser.uid,
-      title: newGroup.title,
-      description: newGroup.description,
-      privacy: newGroup.privacy,
-      members: [authUser.uid],
-      createdAt: new Date().toISOString()
-    };
-
     try {
-      await addDoc(collection(db, 'groups'), groupData);
-      setShowCreateModal(false);
-      setNewGroup({ title: '', description: '', privacy: 'public' });
-      alert("Group created successfully!");
+      const response = await fetch('/api/groups', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(newGroup)
+      });
+      if (response.ok) {
+        const addedGroup = await response.json();
+        setGroups(prev => [addedGroup, ...prev]);
+        setShowCreateModal(false);
+        setNewGroup({ title: '', description: '', privacy: 'public' });
+        alert("Group created successfully!");
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'groups');
+      console.error('Error creating group:', err);
     }
   };
 
   const handleJoinGroup = async (groupId: string, members: string[]) => {
     if (!authUser) return;
     const isMember = members.includes(authUser.uid);
-    const newMembers = isMember 
-      ? members.filter(id => id !== authUser.uid)
-      : [...members, authUser.uid];
 
     try {
-      await updateDoc(doc(db, 'groups', groupId), { members: newMembers });
-      
-      if (!isMember) {
-        // Notify owner
-        const group = groups.find(g => g.id === groupId);
-        if (group && group.ownerId !== authUser.uid) {
-          await addDoc(collection(db, 'notifications'), {
-            receiverId: group.ownerId,
-            senderId: authUser.uid,
-            senderName: profile?.name || 'Someone',
-            type: 'group_join',
-            targetId: groupId,
-            targetName: group.title,
-            read: false,
-            createdAt: new Date().toISOString()
-          });
-        }
+      const response = await fetch(`/api/groups/${groupId}/join`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const updatedGroup = await response.json();
+        setGroups(prev => prev.map(g => g.id === groupId ? updatedGroup : g));
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'groups');
+      console.error('Error joining group:', err);
     }
   };
 

@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, addDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, X, Info, MapPin, Star, MessageCircle, Sparkles } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import { socialApi } from '../api';
 
 const Discover: React.FC = () => {
   const { profile } = useAuth();
@@ -20,41 +19,16 @@ const Discover: React.FC = () => {
       if (!profile) return;
       setLoading(true);
       try {
-        const usersRef = collection(db, 'users');
-        // Simple query: not me
-        const q = query(usersRef, where('uid', '!=', profile.uid));
-        const querySnapshot = await getDocs(q);
-        
-        const swipedIds = [...(profile.likes || []), ...(profile.dislikes || [])];
-        const filteredUsers = querySnapshot.docs
-          .map(doc => doc.data() as UserProfile)
-          .filter(u => {
-            // Filter out already swiped
-            if (swipedIds.includes(u.uid)) return false;
-            
-            // Strict Male/Female matching
-            if (profile.gender === 'Male') {
-              if (u.gender !== 'Female') return false;
-            } else if (profile.gender === 'Female') {
-              if (u.gender !== 'Male') return false;
-            } else {
-              // For other genders, we could either show nothing or follow a default
-              // But the requirement is "Match Male And female"
-              return false; 
-            }
-
-            // Filter by location if set (simple match)
-            // Only filter if both have location set
-            if (profile.location && u.location) {
-              if (profile.location.toLowerCase() !== u.location.toLowerCase()) return false;
-            }
-            
-            return true;
-          });
-        
-        setUsers(filteredUsers);
+        const targetGender = profile.gender === 'Male' ? 'Female' : (profile.gender === 'Female' ? 'Male' : '');
+        const response = await fetch(`/api/users/match?gender=${targetGender}`);
+        if (response.ok) {
+          const data = await response.json();
+          // Filter out already swiped (this should ideally be done on the backend)
+          const swipedIds = [...(profile.likes || []), ...(profile.dislikes || [])];
+          setUsers(data.filter((u: UserProfile) => !swipedIds.includes(u.uid)));
+        }
       } catch (err) {
-        handleFirestoreError(err, OperationType.GET, 'users');
+        console.error("Error fetching users:", err);
       } finally {
         setLoading(false);
       }
@@ -67,39 +41,25 @@ const Discover: React.FC = () => {
     if (!profile || users.length === 0) return;
     
     const targetUser = users[currentIndex];
-    const userRef = doc(db, 'users', profile.uid);
 
     try {
-      if (direction === 'right') {
-        await updateDoc(userRef, {
-          likes: arrayUnion(targetUser.uid)
-        });
+      const response = await fetch(`/api/users/${targetUser.uid}/swipe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ direction })
+      });
 
-        // Check for match
-        if (targetUser.likes?.includes(profile.uid)) {
-          // It's a match!
-          await updateDoc(userRef, { matches: arrayUnion(targetUser.uid) });
-          await updateDoc(doc(db, 'users', targetUser.uid), { matches: arrayUnion(profile.uid) });
-          
-          // Create notification
-          await addDoc(collection(db, 'notifications'), {
-            receiverId: targetUser.uid,
-            senderId: profile.uid,
-            senderName: profile.name,
-            type: 'match',
-            read: false,
-            createdAt: new Date().toISOString()
-          });
-          
+      if (response.ok) {
+        const data = await response.json();
+        if (data.isMatch) {
           setShowMatchModal(targetUser);
         }
-      } else {
-        await updateDoc(userRef, {
-          dislikes: arrayUnion(targetUser.uid)
-        });
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+      console.error("Error swiping:", err);
     }
 
     setCurrentIndex(prev => prev + 1);

@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, arrayUnion, arrayRemove, collection, addDoc, query, where, orderBy } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Page, Post } from '../types';
 import { BadgeCheck, Users, Heart, MessageSquare, ArrowLeft, Image as ImageIcon, Send, MoreHorizontal } from 'lucide-react';
@@ -19,89 +17,67 @@ const PageDetails: React.FC = () => {
   useEffect(() => {
     if (!id) return;
 
-    const unsubPage = onSnapshot(doc(db, 'pages', id), (doc) => {
-      if (doc.exists()) {
-        setPage({ id: doc.id, ...doc.data() } as Page);
+    const fetchPageDetails = async () => {
+      try {
+        const response = await fetch(`/api/pages/${id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setPage(data);
+        }
+      } catch (error) {
+        console.error('Error fetching page details:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.GET, `pages/${id}`);
-      setLoading(false);
-    });
-
-    const postsQuery = query(
-      collection(db, 'posts'),
-      where('pageId', '==', id),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubPosts = onSnapshot(postsQuery, (snap) => {
-      setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Post)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'posts');
-    });
-
-    return () => {
-      unsubPage();
-      unsubPosts();
     };
+
+    const fetchPagePosts = async () => {
+      try {
+        const response = await fetch(`/api/posts?pageId=${id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setPosts(data);
+        }
+      } catch (error) {
+        console.error('Error fetching page posts:', error);
+      }
+    };
+
+    fetchPageDetails();
+    fetchPagePosts();
   }, [id]);
 
   const handleFollow = async () => {
     if (!authUser || !page) return;
-    const isFollowing = page.followers.includes(authUser.uid);
-    const pageRef = doc(db, 'pages', page.id);
 
     try {
-      if (isFollowing) {
-        await updateDoc(pageRef, { followers: arrayRemove(authUser.uid) });
-      } else {
-        await updateDoc(pageRef, { followers: arrayUnion(authUser.uid) });
-        // Notify owner
-        if (page.ownerId !== authUser.uid) {
-          await addDoc(collection(db, 'notifications'), {
-            receiverId: page.ownerId,
-            senderId: authUser.uid,
-            senderName: profile?.name || 'Someone',
-            type: 'page_follow',
-            targetId: page.id,
-            targetName: page.title,
-            read: false,
-            createdAt: new Date().toISOString()
-          });
-        }
+      const response = await fetch(`/api/pages/${page.id}/follow`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const updatedPage = await response.json();
+        setPage(updatedPage);
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'pages');
+      console.error('Error following page:', err);
     }
   };
 
   const handleLike = async () => {
     if (!authUser || !page) return;
-    const isLiked = page.likes?.includes(authUser.uid);
-    const pageRef = doc(db, 'pages', page.id);
 
     try {
-      if (isLiked) {
-        await updateDoc(pageRef, { likes: arrayRemove(authUser.uid) });
-      } else {
-        await updateDoc(pageRef, { likes: arrayUnion(authUser.uid) });
-        // Notify owner
-        if (page.ownerId !== authUser.uid) {
-          await addDoc(collection(db, 'notifications'), {
-            receiverId: page.ownerId,
-            senderId: authUser.uid,
-            senderName: profile?.name || 'Someone',
-            type: 'like',
-            targetId: page.id,
-            targetName: page.title,
-            read: false,
-            createdAt: new Date().toISOString()
-          });
-        }
+      const response = await fetch(`/api/pages/${page.id}/like`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const updatedPage = await response.json();
+        setPage(updatedPage);
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'pages');
+      console.error('Error liking page:', err);
     }
   };
 
@@ -110,20 +86,24 @@ const PageDetails: React.FC = () => {
     if (!authUser || !page || !newPost.trim()) return;
 
     try {
-      await addDoc(collection(db, 'posts'), {
-        userId: page.id, // Post as page
-        pageId: page.id,
-        authorName: page.title,
-        authorPhoto: page.avatarUrl,
-        content: newPost,
-        likes: [],
-        comments: [],
-        views: 0,
-        createdAt: new Date().toISOString()
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          pageId: page.id,
+          content: newPost
+        })
       });
-      setNewPost('');
+      if (response.ok) {
+        const addedPost = await response.json();
+        setPosts(prev => [addedPost, ...prev]);
+        setNewPost('');
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'posts');
+      console.error('Error creating post:', err);
     }
   };
 

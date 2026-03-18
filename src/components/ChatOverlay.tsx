@@ -2,13 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
 import { Message, UserProfile } from '../types';
-import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
 import { io, Socket } from 'socket.io-client';
 import { X, Send, Image as ImageIcon, Smile, Mic, Check, CheckCheck, MoreVertical, Phone, Video } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { socialApi } from '../api';
 
 const ChatOverlay: React.FC = () => {
   const { activeChatId, activeOtherUser, isOverlayOpen, closeChat } = useChat();
@@ -50,21 +49,22 @@ const ChatOverlay: React.FC = () => {
       }
     });
 
-    const q = query(
-      collection(db, 'chats', activeChatId, 'messages'),
-      orderBy('createdAt', 'asc')
-    );
+    const fetchMessages = async () => {
+      try {
+        const response = await fetch(`/api/messages/${activeChatId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setMessages(data);
+        }
+      } catch (error) {
+        console.error("Error fetching messages:", error);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
-      setMessages(msgs);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, `chats/${activeChatId}/messages`);
-    });
+    fetchMessages();
 
     return () => {
       socketRef.current?.disconnect();
-      unsubscribe();
     };
   }, [isOverlayOpen, activeChatId, profile, activeOtherUser]);
 
@@ -102,13 +102,16 @@ const ChatOverlay: React.FC = () => {
     };
 
     try {
-      await addDoc(collection(db, 'chats', activeChatId, 'messages'), messageData);
+      await socialApi.sendMessage({
+        receiverId: activeOtherUser.uid,
+        text: newMessage
+      });
       socketRef.current?.emit('send_message', messageData);
       setNewMessage('');
       setIsTyping(false);
       socketRef.current?.emit('typing', { chatId: activeChatId, userId: profile?.uid, isTyping: false });
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `chats/${activeChatId}/messages`);
+      console.error("Error sending message:", err);
     }
   };
 

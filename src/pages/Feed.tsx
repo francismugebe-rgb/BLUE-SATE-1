@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, arrayUnion, arrayRemove, where, increment, getDocs, getDoc, limit as firestoreLimit } from 'firebase/firestore';
-import { db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Post, UserProfile, Page, Group, Reel } from '../types';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, X, BadgeCheck, Video, Megaphone, Info, DollarSign, Flag, ExternalLink, Smile, Users, Plus, MessageSquare } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
-import { fileToBase64, validateFile } from '../lib/utils';
-import { accumulatePoints } from '../services/pointService';
+import { socialApi } from '../api';
 
 const EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
@@ -43,73 +39,48 @@ const Feed: React.FC = () => {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const snap = await getDoc(doc(db, 'settings', 'site'));
-        if (snap.exists()) {
-          setSiteSettings(snap.data() as any);
+        const response = await fetch('/api/settings');
+        if (response.ok) {
+          const data = await response.json();
+          setSiteSettings(data);
         }
       } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'settings/site');
+        console.error("Error fetching settings:", error);
       }
     };
     fetchSettings();
   }, []);
 
   useEffect(() => {
-    const postsRef = collection(db, 'posts');
-    let q = query(postsRef, orderBy('createdAt', 'desc'));
-
-    if (feedType === 'following' && profile?.following?.length) {
-      q = query(postsRef, where('userId', 'in', profile.following), orderBy('createdAt', 'desc'));
-    } else if (feedType === 'following') {
-      setPosts([]);
-      return;
-    }
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
-      // Purely chronological sort to ensure new posts appear at the top
-      const sortedPosts = [...postsData].sort((a, b) => {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-      setPosts(sortedPosts);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'posts');
-    });
-    return () => unsubscribe();
+    const fetchPosts = async () => {
+      try {
+        const postsData = await socialApi.getPosts();
+        setPosts(postsData);
+      } catch (error) {
+        console.error("Error fetching posts:", error);
+      }
+    };
+    fetchPosts();
   }, [feedType, profile?.following]);
   
   useEffect(() => {
     if (!profile) return;
 
-    // Suggested Users
     const fetchSuggestions = async () => {
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, firestoreLimit(5));
-      const snap = await getDocs(q);
-      const allUsers = snap.docs.map(d => d.data() as UserProfile);
-      
-      setSuggestedUsers(allUsers.filter(u => u.uid !== profile.uid && !profile.following?.includes(u.uid)));
-
-      // Matches (Complete profiles + Gender preference)
-      const potentialMatches = allUsers.filter(u => {
-        if (u.uid === profile.uid) return false;
-        const isComplete = u.name && u.photos?.length && u.bio && u.city && u.country;
-        const genderMatch = !profile.interestedIn || profile.interestedIn === 'Both' || u.gender === profile.interestedIn;
-        return isComplete && genderMatch;
-      });
-      setMatches(potentialMatches.slice(0, 3));
-
-      // Suggested Pages
-      const pagesRef = collection(db, 'pages');
-      const pq = query(pagesRef, firestoreLimit(3));
-      const psnap = await getDocs(pq);
-      setSuggestedPages(psnap.docs.map(d => ({ id: d.id, ...d.data() } as Page)));
-
-      // Suggested Groups
-      const groupsRef = collection(db, 'groups');
-      const gq = query(groupsRef, firestoreLimit(3));
-      const gsnap = await getDocs(gq);
-      setSuggestedGroups(gsnap.docs.map(d => ({ id: d.id, ...d.data() } as Group)));
+      try {
+        const [users, pages, groups] = await Promise.all([
+          fetch('/api/users?limit=5').then(res => res.json()),
+          fetch('/api/pages?limit=3').then(res => res.json()),
+          fetch('/api/groups?limit=3').then(res => res.json())
+        ]);
+        
+        setSuggestedUsers(users.filter((u: any) => u.uid !== profile.uid && !profile.following?.includes(u.uid)));
+        setMatches(users.filter((u: any) => u.uid !== profile.uid).slice(0, 3));
+        setSuggestedPages(pages);
+        setSuggestedGroups(groups);
+      } catch (error) {
+        console.error("Error fetching suggestions:", error);
+      }
     };
 
     fetchSuggestions();
@@ -139,97 +110,29 @@ const Feed: React.FC = () => {
     setIsPosting(true);
     setUploadProgress(0);
 
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const urls = newPost.match(urlRegex);
-    let linkPreview = null;
-    if (urls && urls.length > 0) {
-      linkPreview = { url: urls[0] };
-    }
-
     try {
       let mediaUrl = postImage;
-      let isReel = false;
-
       if (postVideo) {
-        const fileName = `${Date.now()}_${postVideo.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const storageRef = ref(storage, `posts/${profile.uid}/${fileName}`);
-        
-        const uploadTask = uploadBytesResumable(storageRef, postVideo);
-        
-        const uploadPromise = new Promise<string>((resolve, reject) => {
-          console.log("Starting uploadPromise for Feed...");
-          uploadTask.on('state_changed', 
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              console.log(`Feed upload progress: ${progress}%`, snapshot.state);
-              setUploadProgress(progress);
-            },
-            (error) => {
-              console.error("Feed upload failed in on('state_changed'):", error);
-              reject(error);
-            },
-            async () => {
-              console.log("Feed upload task completed callback");
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadURL);
-            }
-          );
-        });
-
-        console.log("Awaiting Feed uploadPromise...");
-        mediaUrl = await uploadPromise;
-        console.log("Feed uploadPromise resolved");
+        const response = await socialApi.uploadFile(postVideo);
+        mediaUrl = response.url;
         setUploadProgress(100);
-
-        if (mediaType === 'video') {
-          const duration = await getVideoDuration(postVideo);
-          if (duration < 30) {
-            isReel = true;
-          }
-        }
       }
 
-      if (isReel && mediaUrl) {
-        await addDoc(collection(db, 'reels'), {
-          userId: profile.uid,
-          authorName: profile.name,
-          authorPhoto: profile.photos?.[0] || '',
-          videoUrl: mediaUrl,
-          caption: newPost,
-          likes: [],
-          comments: [],
-          views: 0,
-          createdAt: new Date().toISOString()
-        });
-        alert('Short video added to Reels!');
-      } else {
-        await addDoc(collection(db, 'posts'), {
-          userId: profile.uid,
-          authorName: profile.name,
-          authorPhoto: profile.photos?.[0] || '',
-          isVerified: profile.isVerified || false,
-          content: newPost,
-          image: mediaType === 'image' ? mediaUrl : (postImage || null),
-          video: mediaType === 'video' ? mediaUrl : null,
-          linkPreview,
-          likes: [],
-          comments: [],
-          views: 0,
-          createdAt: new Date().toISOString()
-        });
-      }
-      
-      await accumulatePoints(profile.uid, 'POST');
-      
+      await socialApi.createPost({
+        content: newPost,
+        imageUrl: mediaType === 'image' ? mediaUrl : null,
+        videoUrl: mediaType === 'video' ? mediaUrl : null,
+      });
+
       setNewPost('');
       setPostImage('');
       setPostVideo(null);
       setMediaType(null);
       setMediaPreview(null);
       setUploadProgress(null);
-    } catch (err) {
-      console.error("Error creating post:", err);
-      alert('Failed to create post.');
+    } catch (error: any) {
+      console.error("Error creating post:", error);
+      alert(error.message || 'Failed to create post.');
     } finally {
       setIsPosting(false);
     }
@@ -237,77 +140,23 @@ const Feed: React.FC = () => {
 
   const handleLike = async (postId: string, emoji: string = '❤️') => {
     if (!profile) return;
-    const postRef = doc(db, 'posts', postId);
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-
-    const existingLike = post.likes.find(l => l.userId === profile.uid);
-    
     try {
-      if (existingLike) {
-        if (existingLike.emoji === emoji) {
-          await updateDoc(postRef, { likes: arrayRemove(existingLike) });
-        } else {
-          await updateDoc(postRef, { likes: arrayRemove(existingLike) });
-          await updateDoc(postRef, { likes: arrayUnion({ userId: profile.uid, emoji }) });
-        }
-      } else {
-        await updateDoc(postRef, { likes: arrayUnion({ userId: profile.uid, emoji }) });
-        await accumulatePoints(profile.uid, 'LIKE');
-        
-        // Notify author
-        const post = posts.find(p => p.id === postId);
-        if (post && post.userId !== profile.uid) {
-          await addDoc(collection(db, 'notifications'), {
-            receiverId: post.userId,
-            senderId: profile.uid,
-            senderName: profile.name,
-            type: 'like',
-            targetId: postId,
-            read: false,
-            createdAt: new Date().toISOString()
-          });
-        }
-      }
+      await socialApi.likePost(postId, emoji);
       setShowEmojiPicker(null);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `posts/${postId}`);
+    } catch (error: any) {
+      console.error("Error liking post:", error);
+      alert(error.message || 'Failed to like post.');
     }
   };
 
   const handleComment = async (postId: string) => {
     if (!profile || !commentText[postId]?.trim()) return;
-    const postRef = doc(db, 'posts', postId);
-    const newComment = {
-      userId: profile.uid,
-      userName: profile.name,
-      comment: commentText[postId],
-      createdAt: new Date().toISOString()
-    };
-
     try {
-      await updateDoc(postRef, {
-        comments: arrayUnion(newComment)
-      });
-      await accumulatePoints(profile.uid, 'COMMENT');
-      
-      // Notify author
-      const post = posts.find(p => p.id === postId);
-      if (post && post.userId !== profile.uid) {
-        await addDoc(collection(db, 'notifications'), {
-          receiverId: post.userId,
-          senderId: profile.uid,
-          senderName: profile.name,
-          type: 'comment',
-          targetId: postId,
-          read: false,
-          createdAt: new Date().toISOString()
-        });
-      }
-
+      await socialApi.commentPost(postId, commentText[postId]);
       setCommentText(prev => ({ ...prev, [postId]: '' }));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `posts/${postId}`);
+    } catch (error: any) {
+      console.error("Error adding comment:", error);
+      alert(error.message || 'Failed to add comment.');
     }
   };
 
@@ -315,38 +164,22 @@ const Feed: React.FC = () => {
     if (!profile) return;
     const reason = prompt("Why are you reporting this?");
     if (!reason) return;
-
     try {
-      await addDoc(collection(db, 'reports'), {
-        reporterId: profile.uid,
-        targetId,
-        targetType,
-        reason,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      });
+      await socialApi.report({ targetId, targetType, reason });
       alert("Thank you for reporting. Our admins will review it.");
-    } catch (err) {
-      console.error("Error reporting:", err);
+    } catch (error: any) {
+      console.error("Error reporting:", error);
+      alert(error.message || 'Failed to report.');
     }
   };
 
   const handleFollow = async (targetUserId: string) => {
     if (!profile || profile.uid === targetUserId) return;
-    const isFollowing = profile.following?.includes(targetUserId);
-    const myRef = doc(db, 'users', profile.uid);
-    const theirRef = doc(db, 'users', targetUserId);
-
     try {
-      if (isFollowing) {
-        await updateDoc(myRef, { following: arrayRemove(targetUserId) });
-        await updateDoc(theirRef, { followers: arrayRemove(profile.uid) });
-      } else {
-        await updateDoc(myRef, { following: arrayUnion(targetUserId) });
-        await updateDoc(theirRef, { followers: arrayUnion(profile.uid) });
-      }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'users');
+      await socialApi.followUser(targetUserId);
+    } catch (error: any) {
+      console.error("Error following/unfollowing:", error);
+      alert(error.message || 'Failed to follow/unfollow.');
     }
   };
 
@@ -590,11 +423,14 @@ const Feed: React.FC = () => {
                 {profile?.uid !== post.userId && (
                   <button 
                     onClick={async () => {
-                      const usersRef = collection(db, 'users');
-                      const q = query(usersRef, where('uid', '==', post.userId), firestoreLimit(1));
-                      const snap = await getDocs(q);
-                      if (!snap.empty) {
-                        openChat(snap.docs[0].data() as UserProfile);
+                      try {
+                        const response = await fetch(`/api/users/${post.userId}`);
+                        if (response.ok) {
+                          const userData = await response.json();
+                          openChat(userData);
+                        }
+                      } catch (error) {
+                        console.error("Error fetching user for chat:", error);
                       }
                     }}
                     className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[#1877f2] transition-colors font-bold text-sm"
