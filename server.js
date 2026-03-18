@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import fetch from "node-fetch";
 import mysql from "mysql2/promise";
+import Database from "better-sqlite3";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -29,6 +30,37 @@ const PAYPAL_API = process.env.PAYPAL_MODE === 'live'
   : 'https://api-m.sandbox.paypal.com';
 
 const JWT_SECRET = process.env.JWT_SECRET || "heartconnect_secret_key_123";
+
+// SQLite fallback
+const dbFile = path.join(__dirname, "database.sqlite");
+let sqlite = null;
+
+function setupSQLite() {
+  sqlite = new Database(dbFile);
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      uid TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      name TEXT NOT NULL,
+      photoURL TEXT,
+      bio TEXT,
+      city TEXT,
+      country TEXT,
+      gender TEXT,
+      relationshipStatus TEXT,
+      interests TEXT,
+      points INTEGER DEFAULT 0,
+      walletBalance REAL DEFAULT 0.00,
+      level TEXT DEFAULT 'Bronze',
+      likes TEXT,
+      dislikes TEXT,
+      matches TEXT,
+      role TEXT DEFAULT 'user',
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+}
 
 // MySQL Connection
 let pool = null;
@@ -280,8 +312,12 @@ async function initDB() {
         connection.release();
       }
     } catch (error) {
-      console.error("Failed to initialize MySQL:", error);
+      console.error("Failed to initialize MySQL, falling back to SQLite:", error);
+      setupSQLite();
     }
+  } else {
+    console.log("MySQL not configured, using SQLite.");
+    setupSQLite();
   }
 }
 
@@ -379,38 +415,65 @@ async function startServer() {
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
       const uid = Date.now().toString();
-      await pool.query(
-        "INSERT INTO users (uid, email, password, name) VALUES (?, ?, ?, ?)",
-        [uid, email, hashedPassword, name]
-      );
+      
+      if (pool) {
+        await pool.query(
+          "INSERT INTO users (uid, email, password, name) VALUES (?, ?, ?, ?)",
+          [uid, email, hashedPassword, name]
+        );
+      } else if (sqlite) {
+        sqlite.prepare("INSERT INTO users (uid, email, password, name) VALUES (?, ?, ?, ?)").run(uid, email, hashedPassword, name);
+      } else {
+        throw new Error("Database not initialized");
+      }
+      
       const token = jwt.sign({ uid, email, name }, JWT_SECRET);
       res.json({ token, user: { uid, email, name } });
     } catch (error) {
-      res.status(500).json({ error: "Registration failed" });
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Registration failed: " + error.message });
     }
   });
 
   app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
     try {
-      const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
-      const user = rows[0];
+      let user;
+      if (pool) {
+        const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
+        user = rows[0];
+      } else if (sqlite) {
+        user = sqlite.prepare("SELECT * FROM users WHERE email = ?").get(email);
+      } else {
+        throw new Error("Database not initialized");
+      }
+
       if (!user || !(await bcrypt.compare(password, user.password))) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
       const token = jwt.sign({ uid: user.uid, email: user.email, name: user.name }, JWT_SECRET);
       res.json({ token, user: { uid: user.uid, email: user.email, name: user.name, photoURL: user.photoURL } });
     } catch (error) {
-      res.status(500).json({ error: "Login failed" });
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Login failed: " + error.message });
     }
   });
 
   app.get("/api/auth/me", authenticateToken, async (req, res) => {
     try {
-      const [rows] = await pool.query("SELECT uid, email, name, photoURL, bio, role, city, country, gender, relationshipStatus, interests, points FROM users WHERE uid = ?", [req.user.uid]);
-      res.json(rows[0]);
+      let user;
+      if (pool) {
+        const [rows] = await pool.query("SELECT uid, email, name, photoURL, bio, role, city, country, gender, relationshipStatus, interests, points FROM users WHERE uid = ?", [req.user.uid]);
+        user = rows[0];
+      } else if (sqlite) {
+        user = sqlite.prepare("SELECT uid, email, name, photoURL, bio, role, city, country, gender, relationshipStatus, interests, points FROM users WHERE uid = ?").get(req.user.uid);
+      } else {
+        throw new Error("Database not initialized");
+      }
+      res.json(user);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch user" });
+      console.error("Fetch user error:", error);
+      res.status(500).json({ error: "Failed to fetch user: " + error.message });
     }
   });
 
