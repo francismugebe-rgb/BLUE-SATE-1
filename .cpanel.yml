@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/user/public_html/
+    - /bin/cp -R * $DEPLOYPATH
+    # Optional: Run npm install and build if the cPanel environment supports it
+    # - cd $DEPLOYPATH && /usr/local/bin/npm install
+    # - cd $DEPLOYPATH && /usr/local/bin/npm run build

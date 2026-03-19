@@ -57,9 +57,173 @@ function setupSQLite() {
       dislikes TEXT,
       matches TEXT,
       role TEXT DEFAULT 'user',
+      savedProducts TEXT,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS transactions (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      amount REAL NOT NULL,
+      type TEXT NOT NULL,
+      description TEXT,
+      status TEXT DEFAULT 'completed',
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(uid) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      id TEXT PRIMARY KEY,
+      pointValue REAL DEFAULT 0.01
+    );
+
+    CREATE TABLE IF NOT EXISTS pages (
+      id TEXT PRIMARY KEY,
+      ownerId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      category TEXT,
+      followers TEXT,
+      likes TEXT,
+      isVerified BOOLEAN DEFAULT 0,
+      coverUrl TEXT,
+      avatarUrl TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (ownerId) REFERENCES users(uid) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS groups (
+      id TEXT PRIMARY KEY,
+      ownerId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      privacy TEXT DEFAULT 'public',
+      members TEXT,
+      coverPhoto TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (ownerId) REFERENCES users(uid) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS products (
+      id TEXT PRIMARY KEY,
+      userId TEXT,
+      authorName TEXT,
+      title TEXT,
+      description TEXT,
+      price REAL,
+      image TEXT,
+      category TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS adverts (
+      id TEXT PRIMARY KEY,
+      sponsorId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      link TEXT NOT NULL,
+      type TEXT NOT NULL,
+      budget REAL NOT NULL,
+      spent REAL DEFAULT 0.00,
+      clicks INTEGER DEFAULT 0,
+      impressions INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending',
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (sponsorId) REFERENCES users(uid) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS posts (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      groupId TEXT,
+      pageId TEXT,
+      content TEXT NOT NULL,
+      imageUrl TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(uid) ON DELETE CASCADE,
+      FOREIGN KEY (groupId) REFERENCES groups(id) ON DELETE SET NULL,
+      FOREIGN KEY (pageId) REFERENCES pages(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS reels (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      videoUrl TEXT NOT NULL,
+      caption TEXT,
+      likes TEXT,
+      comments TEXT,
+      views INTEGER DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(uid) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS comments (
+      id TEXT PRIMARY KEY,
+      targetId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      text TEXT NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(uid) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS likes (
+      id TEXT PRIMARY KEY,
+      targetId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(targetId, userId),
+      FOREIGN KEY (userId) REFERENCES users(uid) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      receiverId TEXT NOT NULL,
+      senderId TEXT NOT NULL,
+      type TEXT NOT NULL,
+      text TEXT,
+      isRead BOOLEAN DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (receiverId) REFERENCES users(uid) ON DELETE CASCADE,
+      FOREIGN KEY (senderId) REFERENCES users(uid) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS followers (
+      userId TEXT,
+      followerId TEXT,
+      PRIMARY KEY (userId, followerId),
+      FOREIGN KEY (userId) REFERENCES users(uid) ON DELETE CASCADE,
+      FOREIGN KEY (followerId) REFERENCES users(uid) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS reports (
+      id TEXT PRIMARY KEY,
+      reporterId TEXT NOT NULL,
+      targetId TEXT NOT NULL,
+      targetType TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (reporterId) REFERENCES users(uid) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      senderId TEXT NOT NULL,
+      receiverId TEXT NOT NULL,
+      text TEXT NOT NULL,
+      isRead BOOLEAN DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (senderId) REFERENCES users(uid) ON DELETE CASCADE,
+      FOREIGN KEY (receiverId) REFERENCES users(uid) ON DELETE CASCADE
+    );
   `);
+
+  // Initialize settings if not exists
+  const settings = sqlite.prepare("SELECT * FROM settings WHERE id = 'site'").get();
+  if (!settings) {
+    sqlite.prepare("INSERT INTO settings (id, pointValue) VALUES ('site', 0.01)").run();
+  }
+  
+  console.log("SQLite Tables initialized.");
 }
 
 // MySQL Connection
@@ -100,6 +264,7 @@ async function initDB() {
             dislikes JSON,
             matches JSON,
             role VARCHAR(50) DEFAULT 'user',
+            savedProducts JSON,
             createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
           )
         `);
@@ -363,6 +528,27 @@ async function getPayPalAccessToken() {
   return data.access_token;
 }
 
+async function dbQuery(query, params = []) {
+  if (pool) {
+    const [rows] = await pool.query(query, params);
+    return rows;
+  } else if (sqlite) {
+    const stmt = sqlite.prepare(query.replace(/\?/g, (match, offset, string) => {
+      // Basic replacement for SQLite compatibility if needed, 
+      // but better-sqlite3 uses ? as well.
+      return '?';
+    }));
+    
+    if (query.trim().toUpperCase().startsWith("SELECT")) {
+      return stmt.all(params);
+    } else {
+      const result = stmt.run(params);
+      return { insertId: result.lastInsertRowid, affectedRows: result.changes };
+    }
+  }
+  throw new Error("No database connection available");
+}
+
 async function startServer() {
   await initDB();
   
@@ -416,16 +602,10 @@ async function startServer() {
       const hashedPassword = await bcrypt.hash(password, 10);
       const uid = Date.now().toString();
       
-      if (pool) {
-        await pool.query(
-          "INSERT INTO users (uid, email, password, name) VALUES (?, ?, ?, ?)",
-          [uid, email, hashedPassword, name]
-        );
-      } else if (sqlite) {
-        sqlite.prepare("INSERT INTO users (uid, email, password, name) VALUES (?, ?, ?, ?)").run(uid, email, hashedPassword, name);
-      } else {
-        throw new Error("Database not initialized");
-      }
+      await dbQuery(
+        "INSERT INTO users (uid, email, password, name) VALUES (?, ?, ?, ?)",
+        [uid, email, hashedPassword, name]
+      );
       
       const token = jwt.sign({ uid, email, name }, JWT_SECRET);
       res.json({ token, user: { uid, email, name } });
@@ -438,15 +618,8 @@ async function startServer() {
   app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
     try {
-      let user;
-      if (pool) {
-        const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
-        user = rows[0];
-      } else if (sqlite) {
-        user = sqlite.prepare("SELECT * FROM users WHERE email = ?").get(email);
-      } else {
-        throw new Error("Database not initialized");
-      }
+      const rows = await dbQuery("SELECT * FROM users WHERE email = ?", [email]);
+      const user = rows[0];
 
       if (!user || !(await bcrypt.compare(password, user.password))) {
         return res.status(401).json({ error: "Invalid credentials" });
@@ -461,15 +634,16 @@ async function startServer() {
 
   app.get("/api/auth/me", authenticateToken, async (req, res) => {
     try {
-      let user;
-      if (pool) {
-        const [rows] = await pool.query("SELECT uid, email, name, photoURL, bio, role, city, country, gender, relationshipStatus, interests, points FROM users WHERE uid = ?", [req.user.uid]);
-        user = rows[0];
-      } else if (sqlite) {
-        user = sqlite.prepare("SELECT uid, email, name, photoURL, bio, role, city, country, gender, relationshipStatus, interests, points FROM users WHERE uid = ?").get(req.user.uid);
-      } else {
-        throw new Error("Database not initialized");
+      const rows = await dbQuery("SELECT uid, email, name, photoURL, bio, role, city, country, gender, relationshipStatus, interests, points, walletBalance, level, savedProducts FROM users WHERE uid = ?", [req.user.uid]);
+      const user = rows[0];
+      if (!user) return res.status(404).json({ error: "User not found" });
+      
+      // Parse JSON fields if using SQLite
+      if (sqlite) {
+        user.interests = JSON.parse(user.interests || '[]');
+        user.savedProducts = JSON.parse(user.savedProducts || '[]');
       }
+      
       res.json(user);
     } catch (error) {
       console.error("Fetch user error:", error);
@@ -480,7 +654,7 @@ async function startServer() {
   app.put("/api/auth/me", authenticateToken, async (req, res) => {
     try {
       const { name, photoURL, bio, city, country, gender, relationshipStatus, interests } = req.body;
-      await pool.query(
+      await dbQuery(
         "UPDATE users SET name = ?, photoURL = ?, bio = ?, city = ?, country = ?, gender = ?, relationshipStatus = ?, interests = ? WHERE uid = ?",
         [name, photoURL, bio, city, country, gender, relationshipStatus, JSON.stringify(interests), req.user.uid]
       );
@@ -493,9 +667,13 @@ async function startServer() {
 
   app.get("/api/users/:uid", async (req, res) => {
     try {
-      const [rows] = await pool.query("SELECT uid, email, name, photoURL, bio, role, city, country, gender, relationshipStatus, interests, points FROM users WHERE uid = ?", [req.params.uid]);
+      const rows = await dbQuery("SELECT uid, email, name, photoURL, bio, role, city, country, gender, relationshipStatus, interests, points FROM users WHERE uid = ?", [req.params.uid]);
       if (rows.length === 0) return res.status(404).json({ error: "User not found" });
-      res.json(rows[0]);
+      const user = rows[0];
+      if (sqlite) {
+        user.interests = JSON.parse(user.interests || '[]');
+      }
+      res.json(user);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch user" });
     }
@@ -503,9 +681,7 @@ async function startServer() {
 
   app.get("/api/users/:uid/followers", async (req, res) => {
     try {
-      // For now, we'll just return an empty array or implement a basic followers table
-      // In a real app, you'd have a followers table
-      const [rows] = await pool.query(`
+      const rows = await dbQuery(`
         SELECT u.uid, u.name, u.photoURL 
         FROM users u 
         JOIN followers f ON u.uid = f.followerId 
@@ -538,15 +714,15 @@ async function startServer() {
       
       query += " ORDER BY p.createdAt DESC ";
       
-      const [rows] = await pool.query(query, params);
+      const rows = await dbQuery(query, params);
       
       const posts = await Promise.all(rows.map(async (post) => {
-        const [likes] = await pool.query("SELECT userId FROM likes WHERE targetId = ?", [post.id]);
-        const [comments] = await pool.query("SELECT * FROM comments WHERE targetId = ?", [post.id]);
+        const likes = await dbQuery("SELECT userId FROM likes WHERE targetId = ?", [post.id]);
+        const comments = await dbQuery("SELECT * FROM comments WHERE targetId = ?", [post.id]);
         
         // If post is from a page, we might need to fetch page info for author
         if (post.pageId && !post.authorName) {
-          const [pageRows] = await pool.query("SELECT title, avatarUrl FROM pages WHERE id = ?", [post.pageId]);
+          const pageRows = await dbQuery("SELECT title, avatarUrl FROM pages WHERE id = ?", [post.pageId]);
           if (pageRows.length > 0) {
             post.authorName = pageRows[0].title;
             post.authorPhoto = pageRows[0].avatarUrl;
@@ -573,7 +749,7 @@ async function startServer() {
       // If pageId is provided, the post is "by the page"
       const userId = pageId ? pageId : req.user.uid;
       
-      await pool.query(
+      await dbQuery(
         "INSERT INTO posts (id, userId, content, imageUrl, groupId, pageId) VALUES (?, ?, ?, ?, ?, ?)",
         [id, userId, content, imageUrl, groupId || null, pageId || null]
       );
@@ -582,7 +758,7 @@ async function startServer() {
       let authorPhoto = req.user.photoURL;
       
       if (pageId) {
-        const [pageRows] = await pool.query("SELECT title, avatarUrl FROM pages WHERE id = ?", [pageId]);
+        const pageRows = await dbQuery("SELECT title, avatarUrl FROM pages WHERE id = ?", [pageId]);
         if (pageRows.length > 0) {
           authorName = pageRows[0].title;
           authorPhoto = pageRows[0].avatarUrl;
@@ -617,7 +793,7 @@ async function startServer() {
     const { targetId, targetType, reason } = req.body;
     try {
       const id = Date.now().toString();
-      await pool.query(
+      await dbQuery(
         "INSERT INTO reports (id, reporterId, targetId, targetType, reason) VALUES (?, ?, ?, ?, ?)",
         [id, req.user.uid, targetId, targetType, reason]
       );
@@ -631,12 +807,12 @@ async function startServer() {
     const targetUserId = req.params.uid;
     const followerId = req.user.uid;
     try {
-      const [rows] = await pool.query("SELECT * FROM followers WHERE userId = ? AND followerId = ?", [targetUserId, followerId]);
+      const rows = await dbQuery("SELECT * FROM followers WHERE userId = ? AND followerId = ?", [targetUserId, followerId]);
       if (rows.length > 0) {
-        await pool.query("DELETE FROM followers WHERE userId = ? AND followerId = ?", [targetUserId, followerId]);
+        await dbQuery("DELETE FROM followers WHERE userId = ? AND followerId = ?", [targetUserId, followerId]);
         res.json({ message: "Unfollowed" });
       } else {
-        await pool.query("INSERT INTO followers (userId, followerId) VALUES (?, ?)", [targetUserId, followerId]);
+        await dbQuery("INSERT INTO followers (userId, followerId) VALUES (?, ?)", [targetUserId, followerId]);
         res.json({ message: "Followed" });
       }
     } catch (error) {
@@ -654,7 +830,7 @@ async function startServer() {
         params.push(gender);
       }
       query += " LIMIT 50";
-      const [rows] = await pool.query(query, params);
+      const rows = await dbQuery(query, params);
       res.json(rows.map((u) => ({
         ...u,
         photos: JSON.parse(u.photos || '[]')
@@ -671,7 +847,7 @@ async function startServer() {
       return res.status(403).json({ error: "Unauthorized" });
     }
     try {
-      const [rows] = await pool.query(
+      const rows = await dbQuery(
         "SELECT * FROM messages WHERE (senderId = ? AND receiverId = ?) OR (senderId = ? AND receiverId = ?) ORDER BY createdAt ASC",
         [u1, u2, u2, u1]
       );
@@ -685,7 +861,7 @@ async function startServer() {
     const { receiverId, text } = req.body;
     try {
       const id = Date.now().toString();
-      await pool.query(
+      await dbQuery(
         "INSERT INTO messages (id, senderId, receiverId, text) VALUES (?, ?, ?, ?)",
         [id, req.user.uid, receiverId, text]
       );
@@ -696,19 +872,9 @@ async function startServer() {
   });
 
   // Reels
-  app.post("/api/reels/:id/view", async (req, res) => {
-    const reelId = req.params.id;
-    try {
-      await pool.query("UPDATE reels SET views = views + 1 WHERE id = ?", [reelId]);
-      res.json({ message: "View recorded" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to record view" });
-    }
-  });
-
   app.get("/api/reels", async (req, res) => {
     try {
-      const [rows] = await pool.query(`
+      const rows = await dbQuery(`
         SELECT r.*, u.name as authorName, u.photoURL as authorPhoto 
         FROM reels r 
         JOIN users u ON r.userId = u.uid 
@@ -716,8 +882,8 @@ async function startServer() {
       `);
       res.json(rows.map((r) => ({
         ...r,
-        likes: JSON.parse(r.likes || '[]'),
-        comments: JSON.parse(r.comments || '[]')
+        likes: typeof r.likes === 'string' ? JSON.parse(r.likes || '[]') : (r.likes || []),
+        comments: typeof r.comments === 'string' ? JSON.parse(r.comments || '[]') : (r.comments || [])
       })));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch reels" });
@@ -728,7 +894,7 @@ async function startServer() {
     const { videoUrl, caption } = req.body;
     try {
       const id = Date.now().toString();
-      await pool.query(
+      await dbQuery(
         "INSERT INTO reels (id, userId, videoUrl, caption, likes, comments) VALUES (?, ?, ?, ?, ?, ?)",
         [id, req.user.uid, videoUrl, caption, '[]', '[]']
       );
@@ -742,17 +908,23 @@ async function startServer() {
     const reelId = req.params.id;
     const userId = req.user.uid;
     try {
-      const [rows] = await pool.query("SELECT likes FROM reels WHERE id = ?", [reelId]);
+      const rows = await dbQuery("SELECT likes FROM reels WHERE id = ?", [reelId]);
       if (rows.length === 0) return res.status(404).json({ error: "Reel not found" });
       
-      let likes = JSON.parse(rows[0].likes || '[]');
+      let likes = [];
+      try {
+        likes = typeof rows[0].likes === 'string' ? JSON.parse(rows[0].likes || '[]') : (rows[0].likes || []);
+      } catch (e) {
+        likes = [];
+      }
+      
       if (likes.includes(userId)) {
         likes = likes.filter((id) => id !== userId);
       } else {
         likes.push(userId);
       }
       
-      await pool.query("UPDATE reels SET likes = ? WHERE id = ?", [JSON.stringify(likes), reelId]);
+      await dbQuery("UPDATE reels SET likes = ? WHERE id = ?", [JSON.stringify(likes), reelId]);
       res.json({ likes });
     } catch (error) {
       res.status(500).json({ error: "Failed to like reel" });
@@ -762,7 +934,7 @@ async function startServer() {
   app.post("/api/reels/:id/view", async (req, res) => {
     const reelId = req.params.id;
     try {
-      await pool.query("UPDATE reels SET views = views + 1 WHERE id = ?", [reelId]);
+      await dbQuery("UPDATE reels SET views = views + 1 WHERE id = ?", [reelId]);
       res.json({ message: "View counted" });
     } catch (error) {
       res.status(500).json({ error: "Failed to count view" });
@@ -775,43 +947,54 @@ async function startServer() {
     const myUid = req.user.uid;
 
     try {
-      const [rows] = await pool.query("SELECT likes, dislikes, matches FROM users WHERE uid = ?", [myUid]);
+      const rows = await dbQuery("SELECT likes, dislikes, matches FROM users WHERE uid = ?", [myUid]);
       if (rows.length === 0) return res.status(404).json({ error: "User not found" });
 
-      let likes = rows[0].likes || [];
-      let dislikes = rows[0].dislikes || [];
-      let matches = rows[0].matches || [];
+      let likes = [];
+      let dislikes = [];
+      let matches = [];
+      
+      try {
+        likes = typeof rows[0].likes === 'string' ? JSON.parse(rows[0].likes || '[]') : (rows[0].likes || []);
+        dislikes = typeof rows[0].dislikes === 'string' ? JSON.parse(rows[0].dislikes || '[]') : (rows[0].dislikes || []);
+        matches = typeof rows[0].matches === 'string' ? JSON.parse(rows[0].matches || '[]') : (rows[0].matches || []);
+      } catch (e) {}
 
       if (direction === 'right') {
         if (!likes.includes(targetUid)) likes.push(targetUid);
         
         // Check for match
-        const [targetRows] = await pool.query("SELECT likes, matches FROM users WHERE uid = ?", [targetUid]);
+        const targetRows = await dbQuery("SELECT likes, matches FROM users WHERE uid = ?", [targetUid]);
         if (targetRows.length > 0) {
-          let targetLikes = targetRows[0].likes || [];
-          let targetMatches = targetRows[0].matches || [];
+          let targetLikes = [];
+          let targetMatches = [];
+          try {
+            targetLikes = typeof targetRows[0].likes === 'string' ? JSON.parse(targetRows[0].likes || '[]') : (targetRows[0].likes || []);
+            targetMatches = typeof targetRows[0].matches === 'string' ? JSON.parse(targetRows[0].matches || '[]') : (targetRows[0].matches || []);
+          } catch (e) {}
           
           if (targetLikes.includes(myUid)) {
             // It's a match!
             if (!matches.includes(targetUid)) matches.push(targetUid);
             if (!targetMatches.includes(myUid)) targetMatches.push(myUid);
             
-            await pool.query("UPDATE users SET matches = ? WHERE uid = ?", [JSON.stringify(targetMatches), targetUid]);
-            await pool.query("UPDATE users SET likes = ?, matches = ? WHERE uid = ?", [JSON.stringify(likes), JSON.stringify(matches), myUid]);
+            await dbQuery("UPDATE users SET matches = ? WHERE uid = ?", [JSON.stringify(targetMatches), targetUid]);
+            await dbQuery("UPDATE users SET likes = ?, matches = ? WHERE uid = ?", [JSON.stringify(likes), JSON.stringify(matches), myUid]);
             
             // Create notification for target user
-            await pool.query(
-              "INSERT INTO notifications (receiverId, senderId, type, read) VALUES (?, ?, ?, ?)",
-              [targetUid, myUid, 'match', false]
+            const notificationId = Date.now().toString();
+            await dbQuery(
+              "INSERT INTO notifications (id, receiverId, senderId, type, text) VALUES (?, ?, ?, ?, ?)",
+              [notificationId, targetUid, myUid, 'match', 'You have a new match!']
             );
             
             return res.json({ isMatch: true });
           }
         }
-        await pool.query("UPDATE users SET likes = ? WHERE uid = ?", [JSON.stringify(likes), myUid]);
+        await dbQuery("UPDATE users SET likes = ? WHERE uid = ?", [JSON.stringify(likes), myUid]);
       } else {
         if (!dislikes.includes(targetUid)) dislikes.push(targetUid);
-        await pool.query("UPDATE users SET dislikes = ? WHERE uid = ?", [JSON.stringify(dislikes), myUid]);
+        await dbQuery("UPDATE users SET dislikes = ? WHERE uid = ?", [JSON.stringify(dislikes), myUid]);
       }
 
       res.json({ isMatch: false });
@@ -820,552 +1003,8 @@ async function startServer() {
     }
   });
 
-  // Wallet & Adverts
-  app.get("/api/transactions", authenticateToken, async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM transactions WHERE userId = ? ORDER BY createdAt DESC", [req.user.uid]);
-      res.json(rows);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch transactions" });
-    }
-  });
-
-  app.get("/api/settings/site", async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM settings WHERE id = 'site'");
-      res.json(rows[0] || { pointValue: 0.01 });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch settings" });
-    }
-  });
-
-  app.post("/api/wallet/convert-points", authenticateToken, async (req, res) => {
-    const userId = req.user.uid;
-    try {
-      const [userRows] = await pool.query("SELECT points, walletBalance FROM users WHERE uid = ?", [userId]);
-      if (userRows.length === 0) return res.status(404).json({ error: "User not found" });
-      
-      const [settingsRows] = await pool.query("SELECT pointValue FROM settings WHERE id = 'site'");
-      const pointValue = settingsRows[0]?.pointValue || 0.01;
-      
-      const points = userRows[0].points;
-      const conversionValue = points * pointValue;
-      
-      if (points <= 0) return res.status(400).json({ error: "No points to convert" });
-      
-      await pool.query("UPDATE users SET points = 0, walletBalance = walletBalance + ? WHERE uid = ?", [conversionValue, userId]);
-      
-      const txId = Date.now().toString();
-      await pool.query(
-        "INSERT INTO transactions (id, userId, amount, type, description) VALUES (?, ?, ?, ?, ?)",
-        [txId, userId, conversionValue, 'points_conversion', 'Points to Wallet']
-      );
-      
-      res.json({ message: "Points converted successfully" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to convert points" });
-    }
-  });
-
-  app.post("/api/adverts", authenticateToken, async (req, res) => {
-    const { title, link, type, budget } = req.body;
-    const userId = req.user.uid;
-    try {
-      const [userRows] = await pool.query("SELECT walletBalance, level FROM users WHERE uid = ?", [userId]);
-      if (userRows.length === 0) return res.status(404).json({ error: "User not found" });
-      
-      if (userRows[0].walletBalance < budget) {
-        return res.status(400).json({ error: "Insufficient balance" });
-      }
-      
-      const adId = Date.now().toString();
-      await pool.query(
-        "INSERT INTO adverts (id, sponsorId, title, link, type, budget) VALUES (?, ?, ?, ?, ?, ?)",
-        [adId, userId, title, link, type, budget]
-      );
-      
-      await pool.query("UPDATE users SET walletBalance = walletBalance - ? WHERE uid = ?", [budget, userId]);
-      
-      const txId = (Date.now() + 1).toString();
-      await pool.query(
-        "INSERT INTO transactions (id, userId, amount, type, description) VALUES (?, ?, ?, ?, ?)",
-        [txId, userId, -budget, 'payment', `Ad Sponsorship: ${title}`]
-      );
-      
-      // Upgrade level
-      const levels = ['Bronze', 'Gold', 'Platinum'];
-      const currentIdx = levels.indexOf(userRows[0].level || 'Bronze');
-      const nextLevel = levels[Math.min(currentIdx + 1, levels.length - 1)];
-      await pool.query("UPDATE users SET level = ? WHERE uid = ?", [nextLevel, userId]);
-      
-      res.json({ id: adId });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to create ad" });
-    }
-  });
-
-  app.post("/api/wallet/accumulate-points", authenticateToken, async (req, res) => {
-    const { type } = req.body;
-    const userId = req.user.uid;
-    const pointsMap = { POST: 10, COMMENT: 5, REEL: 15, LIKE: 1 };
-    const points = pointsMap[type] || 0;
-    
-    try {
-      await pool.query("UPDATE users SET points = points + ? WHERE uid = ?", [points, userId]);
-      res.json({ message: "Points accumulated" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to accumulate points" });
-    }
-  });
-
-  app.post("/api/transactions", authenticateToken, async (req, res) => {
-    const { amount, type, description, status } = req.body;
-    const userId = req.user.uid;
-    const id = Date.now().toString();
-    
-    try {
-      await pool.query(
-        "INSERT INTO transactions (id, userId, amount, type, description, status) VALUES (?, ?, ?, ?, ?, ?)",
-        [id, userId, amount, type, description, status || 'completed']
-      );
-      
-      if (status === 'completed') {
-        await pool.query("UPDATE users SET walletBalance = walletBalance + ? WHERE uid = ?", [amount, userId]);
-      }
-      
-      res.json({ id });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to create transaction" });
-    }
-  });
-
-  app.get("/api/chats", authenticateToken, async (req, res) => {
-    const userId = req.user.uid;
-    try {
-      const [userRows] = await pool.query("SELECT matches FROM users WHERE uid = ?", [userId]);
-      const matches = userRows[0]?.matches || [];
-      
-      const chatList = await Promise.all(matches.map(async (matchId) => {
-        const [otherUserRows] = await pool.query("SELECT * FROM users WHERE uid = ?", [matchId]);
-        const otherUser = otherUserRows[0];
-        const id = [userId, matchId].sort().join('_');
-        return { id, otherUser };
-      }));
-      
-      res.json(chatList);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch chats" });
-    }
-  });
-
-  app.get("/api/pages", async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM pages ORDER BY createdAt DESC");
-      res.json(rows.map((p) => ({
-        ...p,
-        followers: JSON.parse(p.followers || '[]'),
-        likes: JSON.parse(p.likes || '[]')
-      })));
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch pages" });
-    }
-  });
-
-  app.post("/api/pages", authenticateToken, async (req, res) => {
-    const { title, description, category } = req.body;
-    const ownerId = req.user.uid;
-    const id = Date.now().toString();
-    
-    try {
-      await pool.query(
-        "INSERT INTO pages (id, ownerId, title, description, category, followers, likes) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [id, ownerId, title, description, category, '[]', '[]']
-      );
-      const [rows] = await pool.query("SELECT * FROM pages WHERE id = ?", [id]);
-      res.json({
-        ...rows[0],
-        followers: [],
-        likes: []
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to create page" });
-    }
-  });
-
-  app.get("/api/pages/:id", async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM pages WHERE id = ?", [req.params.id]);
-      if (rows.length === 0) return res.status(404).json({ error: "Page not found" });
-      res.json({
-        ...rows[0],
-        followers: JSON.parse(rows[0].followers || '[]'),
-        likes: JSON.parse(rows[0].likes || '[]')
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch page" });
-    }
-  });
-
-  app.post("/api/pages/:id/follow", authenticateToken, async (req, res) => {
-    const userId = req.user.uid;
-    const pageId = req.params.id;
-    try {
-      const [pageRows] = await pool.query("SELECT * FROM pages WHERE id = ?", [pageId]);
-      if (pageRows.length === 0) return res.status(404).json({ error: "Page not found" });
-      
-      let followers = JSON.parse(pageRows[0].followers || '[]');
-      const isFollowing = followers.includes(userId);
-      
-      if (isFollowing) {
-        followers = followers.filter((id) => id !== userId);
-      } else {
-        followers.push(userId);
-      }
-      
-      await pool.query("UPDATE pages SET followers = ? WHERE id = ?", [JSON.stringify(followers), pageId]);
-      
-      // Notify owner if following
-      if (!isFollowing && pageRows[0].ownerId !== userId) {
-        const notificationId = Date.now().toString();
-        await pool.query(
-          "INSERT INTO notifications (id, receiverId, senderId, type, text) VALUES (?, ?, ?, ?, ?)",
-          [notificationId, pageRows[0].ownerId, userId, 'page_follow', `Someone followed your page ${pageRows[0].title}`]
-        );
-      }
-      
-      const [updatedPage] = await pool.query("SELECT * FROM pages WHERE id = ?", [pageId]);
-      res.json({
-        ...updatedPage[0],
-        followers,
-        likes: JSON.parse(updatedPage[0].likes || '[]')
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to follow page" });
-    }
-  });
-
-  app.post("/api/pages/:id/like", authenticateToken, async (req, res) => {
-    const userId = req.user.uid;
-    const pageId = req.params.id;
-    try {
-      const [pageRows] = await pool.query("SELECT * FROM pages WHERE id = ?", [pageId]);
-      if (pageRows.length === 0) return res.status(404).json({ error: "Page not found" });
-      
-      let likes = JSON.parse(pageRows[0].likes || '[]');
-      const isLiked = likes.includes(userId);
-      
-      if (isLiked) {
-        likes = likes.filter((id) => id !== userId);
-      } else {
-        likes.push(userId);
-      }
-      
-      await pool.query("UPDATE pages SET likes = ? WHERE id = ?", [JSON.stringify(likes), pageId]);
-      
-      // Notify owner if liked
-      if (!isLiked && pageRows[0].ownerId !== userId) {
-        const notificationId = Date.now().toString();
-        await pool.query(
-          "INSERT INTO notifications (id, receiverId, senderId, type, text) VALUES (?, ?, ?, ?, ?)",
-          [notificationId, pageRows[0].ownerId, userId, 'like', `Someone liked your page ${pageRows[0].title}`]
-        );
-      }
-      
-      const [updatedPage] = await pool.query("SELECT * FROM pages WHERE id = ?", [pageId]);
-      res.json({
-        ...updatedPage[0],
-        followers: JSON.parse(updatedPage[0].followers || '[]'),
-        likes
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to like page" });
-    }
-  });
-
-  app.get("/api/groups", async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM groups ORDER BY createdAt DESC");
-      res.json(rows);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch groups" });
-    }
-  });
-
-  app.post("/api/groups", authenticateToken, async (req, res) => {
-    const { title, description, privacy } = req.body;
-    const ownerId = req.user.uid;
-    const id = Date.now().toString();
-    const members = JSON.stringify([ownerId]);
-    
-    try {
-      await pool.query(
-        "INSERT INTO groups (id, ownerId, title, description, privacy, members) VALUES (?, ?, ?, ?, ?, ?)",
-        [id, ownerId, title, description, privacy, members]
-      );
-      const [rows] = await pool.query("SELECT * FROM groups WHERE id = ?", [id]);
-      res.json(rows[0]);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to create group" });
-    }
-  });
-
-  app.get("/api/groups/:id", async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM groups WHERE id = ?", [req.params.id]);
-      if (rows.length === 0) return res.status(404).json({ error: "Group not found" });
-      res.json(rows[0]);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch group" });
-    }
-  });
-
-  app.post("/api/groups/:id/join", authenticateToken, async (req, res) => {
-    const userId = req.user.uid;
-    const groupId = req.params.id;
-    try {
-      const [groupRows] = await pool.query("SELECT * FROM groups WHERE id = ?", [groupId]);
-      if (groupRows.length === 0) return res.status(404).json({ error: "Group not found" });
-      
-      let members = groupRows[0].members || [];
-      const isMember = members.includes(userId);
-      
-      if (isMember) {
-        members = members.filter((id) => id !== userId);
-      } else {
-        members.push(userId);
-      }
-      
-      await pool.query("UPDATE groups SET members = ? WHERE id = ?", [JSON.stringify(members), groupId]);
-      
-      // Notify owner if joining
-      if (!isMember && groupRows[0].ownerId !== userId) {
-        const notificationId = Date.now().toString();
-        await pool.query(
-          "INSERT INTO notifications (id, receiverId, senderId, type, text) VALUES (?, ?, ?, ?, ?)",
-          [notificationId, groupRows[0].ownerId, userId, 'group_join', `Someone joined your group ${groupRows[0].title}`]
-        );
-      }
-      
-      const [updatedGroup] = await pool.query("SELECT * FROM groups WHERE id = ?", [groupId]);
-      res.json(updatedGroup[0]);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to join group" });
-    }
-  });
-
-  app.get("/api/products", async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM products ORDER BY createdAt DESC");
-      res.json(rows);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch products" });
-    }
-  });
-
-  app.post("/api/products", authenticateToken, async (req, res) => {
-    const { title, description, price, image, category } = req.body;
-    const userId = req.user.uid;
-    const authorName = req.user.name;
-    const id = Date.now().toString();
-    
-    try {
-      await pool.query(
-        "INSERT INTO products (id, userId, authorName, title, description, price, image, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        [id, userId, authorName, title, description, price, image, category]
-      );
-      const [rows] = await pool.query("SELECT * FROM products WHERE id = ?", [id]);
-      res.json(rows[0]);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to create product" });
-    }
-  });
-
-  app.delete("/api/products/:id", authenticateToken, async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT userId FROM products WHERE id = ?", [req.params.id]);
-      if (rows.length === 0) return res.status(404).json({ error: "Product not found" });
-      
-      if (rows[0].userId !== req.user.uid && req.user.role !== 'admin') {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-      
-      await pool.query("DELETE FROM products WHERE id = ?", [req.params.id]);
-      res.json({ message: "Product deleted" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete product" });
-    }
-  });
-
-  app.post("/api/products/:id/save", authenticateToken, async (req, res) => {
-    const userId = req.user.uid;
-    const productId = req.params.id;
-    try {
-      const [userRows] = await pool.query("SELECT savedProducts FROM users WHERE uid = ?", [userId]);
-      let savedProducts = userRows[0]?.savedProducts || [];
-      
-      if (savedProducts.includes(productId)) {
-        savedProducts = savedProducts.filter((id) => id !== productId);
-      } else {
-        savedProducts.push(productId);
-      }
-      
-      await pool.query("UPDATE users SET savedProducts = ? WHERE uid = ?", [JSON.stringify(savedProducts), userId]);
-      res.json({ message: "Product save status updated", savedProducts });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to save product" });
-    }
-  });
-
-  const isAdmin = (req, res, next) => {
-    if (req.user && req.user.role === 'admin') {
-      next();
-    } else {
-      res.status(403).json({ error: "Admin access required" });
-    }
-  };
-
-  app.post("/api/admin/settings", authenticateToken, isAdmin, async (req, res) => {
-    const { pointValue, announcement, adHtml } = req.body;
-    try {
-      await pool.query(
-        "UPDATE settings SET pointValue = ?, announcement = ?, adHtml = ? WHERE id = 'site'",
-        [pointValue, announcement, adHtml]
-      );
-      res.json({ message: "Settings updated" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update settings" });
-    }
-  });
-
-  app.get("/api/admin/users", authenticateToken, isAdmin, async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM users LIMIT 50");
-      res.json(rows);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch users" });
-    }
-  });
-
-  app.get("/api/admin/posts", authenticateToken, isAdmin, async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM posts ORDER BY createdAt DESC LIMIT 50");
-      res.json(rows);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch posts" });
-    }
-  });
-
-  app.get("/api/admin/reports", authenticateToken, isAdmin, async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM reports ORDER BY createdAt DESC LIMIT 50");
-      res.json(rows);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch reports" });
-    }
-  });
-
-  app.get("/api/admin/adverts", authenticateToken, isAdmin, async (req, res) => {
-    try {
-      const [rows] = await pool.query("SELECT * FROM adverts ORDER BY createdAt DESC LIMIT 50");
-      res.json(rows);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch adverts" });
-    }
-  });
-
-  app.post("/api/admin/users/:uid/promote", authenticateToken, isAdmin, async (req, res) => {
-    try {
-      await pool.query("UPDATE users SET role = 'admin' WHERE uid = ?", [req.params.uid]);
-      res.json({ message: "User promoted" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to promote user" });
-    }
-  });
-
-  app.delete("/api/admin/posts/:id", authenticateToken, isAdmin, async (req, res) => {
-    try {
-      await pool.query("DELETE FROM posts WHERE id = ?", [req.params.id]);
-      res.json({ message: "Post deleted" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete post" });
-    }
-  });
-
-  app.post("/api/admin/users/:uid/verify", authenticateToken, isAdmin, async (req, res) => {
-    const { approve } = req.body;
-    try {
-      await pool.query(
-        "UPDATE users SET isVerified = ?, isVerifiedPending = 0 WHERE uid = ?",
-        [approve ? 1 : 0, req.params.uid]
-      );
-      res.json({ message: "Verification processed" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to verify user" });
-    }
-  });
-
-  app.post("/api/admin/users/:uid/ban", authenticateToken, isAdmin, async (req, res) => {
-    const { ban } = req.body;
-    try {
-      await pool.query("UPDATE users SET isBanned = ? WHERE uid = ?", [ban ? 1 : 0, req.params.uid]);
-      res.json({ message: "Ban status updated" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update ban status" });
-    }
-  });
-
-  app.post("/api/admin/users/:uid/suspend", authenticateToken, isAdmin, async (req, res) => {
-    const { duration, until } = req.body;
-    try {
-      await pool.query(
-        "UPDATE users SET isSuspended = ?, suspensionUntil = ? WHERE uid = ?",
-        [duration > 0 ? 1 : 0, until, req.params.uid]
-      );
-      res.json({ message: "Suspension status updated" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update suspension status" });
-    }
-  });
-
-  app.post("/api/admin/reports/:id/resolve", authenticateToken, isAdmin, async (req, res) => {
-    try {
-      await pool.query("UPDATE reports SET status = 'resolved' WHERE id = ?", [req.params.id]);
-      res.json({ message: "Report resolved" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to resolve report" });
-    }
-  });
-
-  app.post("/api/admin/adverts/:id/approve", authenticateToken, isAdmin, async (req, res) => {
-    const { approve } = req.body;
-    try {
-      await pool.query(
-        "UPDATE adverts SET status = ? WHERE id = ?",
-        [approve ? 'active' : 'rejected', req.params.id]
-      );
-      res.json({ message: "Advert status updated" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update advert status" });
-    }
-  });
-
-  app.post("/api/admin/users/:uid/fund", authenticateToken, isAdmin, async (req, res) => {
-    const { amount } = req.body;
-    const id = Date.now().toString();
-    try {
-      await pool.query("UPDATE users SET walletBalance = walletBalance + ? WHERE uid = ?", [amount, req.params.uid]);
-      await pool.query(
-        "INSERT INTO transactions (id, userId, amount, type, description, status) VALUES (?, ?, ?, ?, ?, ?)",
-        [id, req.params.uid, amount, 'deposit', 'Admin Funding', 'completed']
-      );
-      res.json({ message: "User funded" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fund user" });
-    }
-  });
-
-  // --- PAYPAL ROUTES ---
-  app.post("/api/paypal/create-order", async (req, res) => {
+  // PayPal Integration
+  app.post("/api/paypal/create-order", authenticateToken, async (req, res) => {
     try {
       const { amount } = req.body;
       const accessToken = await getPayPalAccessToken();
@@ -1377,13 +1016,21 @@ async function startServer() {
         },
         body: JSON.stringify({
           intent: 'CAPTURE',
-          purchase_units: [{ amount: { currency_code: 'USD', value: amount } }],
+          purchase_units: [
+            {
+              amount: {
+                currency_code: 'USD',
+                value: amount,
+              },
+            },
+          ],
         }),
       });
       const data = await response.json();
       res.json(data);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to create PayPal order' });
+      console.error("PayPal Create Order Error:", error);
+      res.status(500).json({ error: "Failed to create PayPal order" });
     }
   });
 
@@ -1401,21 +1048,667 @@ async function startServer() {
       const data = await response.json();
       
       if (data.status === 'COMPLETED') {
-        const amount = data.purchase_units[0].payments.captures[0].amount.value;
         const userId = req.user.uid;
+        const amount = parseFloat(data.purchase_units[0].payments.captures[0].amount.value);
         
-        await pool.query("UPDATE users SET walletBalance = walletBalance + ? WHERE uid = ?", [amount, userId]);
+        // Update user balance
+        await dbQuery("UPDATE users SET walletBalance = walletBalance + ? WHERE uid = ?", [amount, userId]);
         
+        // Record transaction
         const txId = Date.now().toString();
-        await pool.query(
-          "INSERT INTO transactions (id, userId, amount, type, description) VALUES (?, ?, ?, ?, ?)",
-          [txId, userId, amount, 'deposit', 'PayPal']
+        await dbQuery(
+          "INSERT INTO transactions (id, userId, amount, type, description, status) VALUES (?, ?, ?, ?, ?, ?)",
+          [txId, userId, amount, 'deposit', 'PayPal Deposit', 'completed']
         );
       }
       
       res.json(data);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to capture PayPal order' });
+      console.error("PayPal Capture Order Error:", error);
+      res.status(500).json({ error: "Failed to capture PayPal order" });
+    }
+  });
+
+  // Marketplace
+  app.get("/api/products", async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM products ORDER BY createdAt DESC");
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch products" });
+    }
+  });
+
+  app.post("/api/products", authenticateToken, async (req, res) => {
+    const { title, description, price, image, category } = req.body;
+    const userId = req.user.uid;
+    const authorName = req.user.name || "Anonymous";
+    const id = Date.now().toString();
+    
+    try {
+      await dbQuery(
+        "INSERT INTO products (id, userId, authorName, title, description, price, image, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [id, userId, authorName, title, description, price, image, category]
+      );
+      const rows = await dbQuery("SELECT * FROM products WHERE id = ?", [id]);
+      res.json(rows[0]);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create product" });
+    }
+  });
+
+  app.delete("/api/products/:id", authenticateToken, async (req, res) => {
+    try {
+      const productId = req.params.id;
+      const userId = req.user.uid;
+      
+      const rows = await dbQuery("SELECT * FROM products WHERE id = ?", [productId]);
+      if (rows.length === 0) return res.status(404).json({ error: "Product not found" });
+      
+      // Only author or admin can delete
+      if (rows[0].userId !== userId && req.user.role !== 'admin') {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      await dbQuery("DELETE FROM products WHERE id = ?", [productId]);
+      res.json({ message: "Product deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete product" });
+    }
+  });
+
+  app.post("/api/products/:id/save", authenticateToken, async (req, res) => {
+    try {
+      const productId = req.params.id;
+      const userId = req.user.uid;
+      
+      const userRows = await dbQuery("SELECT savedProducts FROM users WHERE uid = ?", [userId]);
+      if (userRows.length === 0) return res.status(404).json({ error: "User not found" });
+      
+      let saved = [];
+      try {
+        saved = typeof userRows[0].savedProducts === 'string' 
+          ? JSON.parse(userRows[0].savedProducts || '[]') 
+          : (userRows[0].savedProducts || []);
+      } catch (e) {
+        saved = [];
+      }
+      
+      if (saved.includes(productId)) {
+        saved = saved.filter(id => id !== productId);
+      } else {
+        saved.push(productId);
+      }
+      
+      await dbQuery("UPDATE users SET savedProducts = ? WHERE uid = ?", [JSON.stringify(saved), userId]);
+      res.json({ saved });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save product" });
+    }
+  });
+
+  // Wallet & Adverts
+  app.get("/api/transactions", authenticateToken, async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM transactions WHERE userId = ? ORDER BY createdAt DESC", [req.user.uid]);
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch transactions" });
+    }
+  });
+
+  app.get("/api/settings/site", async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM settings WHERE id = 'site'");
+      res.json(rows[0] || { pointValue: 0.01 });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
+  app.post("/api/wallet/convert-points", authenticateToken, async (req, res) => {
+    const userId = req.user.uid;
+    try {
+      const userRows = await dbQuery("SELECT points, walletBalance FROM users WHERE uid = ?", [userId]);
+      if (userRows.length === 0) return res.status(404).json({ error: "User not found" });
+      
+      const settingsRows = await dbQuery("SELECT pointValue FROM settings WHERE id = 'site'");
+      const pointValue = settingsRows[0]?.pointValue || 0.01;
+      
+      const points = userRows[0].points;
+      const conversionValue = points * pointValue;
+      
+      if (points <= 0) return res.status(400).json({ error: "No points to convert" });
+      
+      await dbQuery("UPDATE users SET points = 0, walletBalance = walletBalance + ? WHERE uid = ?", [conversionValue, userId]);
+      
+      const txId = Date.now().toString();
+      await dbQuery(
+        "INSERT INTO transactions (id, userId, amount, type, description) VALUES (?, ?, ?, ?, ?)",
+        [txId, userId, conversionValue, 'points_conversion', 'Points to Wallet']
+      );
+      
+      res.json({ message: "Points converted successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to convert points" });
+    }
+  });
+
+  app.post("/api/adverts", authenticateToken, async (req, res) => {
+    const { title, link, type, budget } = req.body;
+    const userId = req.user.uid;
+    try {
+      const userRows = await dbQuery("SELECT walletBalance, level FROM users WHERE uid = ?", [userId]);
+      if (userRows.length === 0) return res.status(404).json({ error: "User not found" });
+      
+      if (userRows[0].walletBalance < budget) {
+        return res.status(400).json({ error: "Insufficient balance" });
+      }
+      
+      const adId = Date.now().toString();
+      await dbQuery(
+        "INSERT INTO adverts (id, sponsorId, title, link, type, budget) VALUES (?, ?, ?, ?, ?, ?)",
+        [adId, userId, title, link, type, budget]
+      );
+      
+      await dbQuery("UPDATE users SET walletBalance = walletBalance - ? WHERE uid = ?", [budget, userId]);
+      
+      const txId = (Date.now() + 1).toString();
+      await dbQuery(
+        "INSERT INTO transactions (id, userId, amount, type, description) VALUES (?, ?, ?, ?, ?)",
+        [txId, userId, -budget, 'payment', `Ad Sponsorship: ${title}`]
+      );
+      
+      // Upgrade level
+      const levels = ['Bronze', 'Gold', 'Platinum'];
+      const currentIdx = levels.indexOf(userRows[0].level || 'Bronze');
+      const nextLevel = levels[Math.min(currentIdx + 1, levels.length - 1)];
+      await dbQuery("UPDATE users SET level = ? WHERE uid = ?", [nextLevel, userId]);
+      
+      res.json({ id: adId });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create ad" });
+    }
+  });
+
+  app.post("/api/wallet/accumulate-points", authenticateToken, async (req, res) => {
+    const { type } = req.body;
+    const userId = req.user.uid;
+    const pointsMap = { POST: 10, COMMENT: 5, REEL: 15, LIKE: 1 };
+    const points = pointsMap[type] || 0;
+    
+    try {
+      await dbQuery("UPDATE users SET points = points + ? WHERE uid = ?", [points, userId]);
+      res.json({ message: "Points accumulated" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to accumulate points" });
+    }
+  });
+
+  app.post("/api/transactions", authenticateToken, async (req, res) => {
+    const { amount, type, description, status } = req.body;
+    const userId = req.user.uid;
+    const id = Date.now().toString();
+    
+    try {
+      await dbQuery(
+        "INSERT INTO transactions (id, userId, amount, type, description, status) VALUES (?, ?, ?, ?, ?, ?)",
+        [id, userId, amount, type, description, status || 'completed']
+      );
+      
+      if (status === 'completed') {
+        await dbQuery("UPDATE users SET walletBalance = walletBalance + ? WHERE uid = ?", [amount, userId]);
+      }
+      
+      res.json({ id });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create transaction" });
+    }
+  });
+
+  app.get("/api/chats", authenticateToken, async (req, res) => {
+    const userId = req.user.uid;
+    try {
+      const userRows = await dbQuery("SELECT matches FROM users WHERE uid = ?", [userId]);
+      const matches = userRows[0]?.matches || [];
+      
+      const chatList = await Promise.all(matches.map(async (matchId) => {
+        const otherUserRows = await dbQuery("SELECT * FROM users WHERE uid = ?", [matchId]);
+        const otherUser = otherUserRows[0];
+        const id = [userId, matchId].sort().join('_');
+        return { id, otherUser };
+      }));
+      
+      res.json(chatList);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch chats" });
+    }
+  });
+
+  app.get("/api/pages", async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM pages ORDER BY createdAt DESC");
+      res.json(rows.map((p) => ({
+        ...p,
+        followers: typeof p.followers === 'string' ? JSON.parse(p.followers || '[]') : (p.followers || []),
+        likes: typeof p.likes === 'string' ? JSON.parse(p.likes || '[]') : (p.likes || [])
+      })));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch pages" });
+    }
+  });
+
+  app.post("/api/pages", authenticateToken, async (req, res) => {
+    const { title, description, category } = req.body;
+    const ownerId = req.user.uid;
+    const id = Date.now().toString();
+    
+    try {
+      await dbQuery(
+        "INSERT INTO pages (id, ownerId, title, description, category, followers, likes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [id, ownerId, title, description, category, '[]', '[]']
+      );
+      const rows = await dbQuery("SELECT * FROM pages WHERE id = ?", [id]);
+      res.json({
+        ...rows[0],
+        followers: [],
+        likes: []
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create page" });
+    }
+  });
+
+  app.get("/api/pages/:id", async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM pages WHERE id = ?", [req.params.id]);
+      if (rows.length === 0) return res.status(404).json({ error: "Page not found" });
+      res.json({
+        ...rows[0],
+        followers: typeof rows[0].followers === 'string' ? JSON.parse(rows[0].followers || '[]') : (rows[0].followers || []),
+        likes: typeof rows[0].likes === 'string' ? JSON.parse(rows[0].likes || '[]') : (rows[0].likes || [])
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch page" });
+    }
+  });
+
+  app.post("/api/pages/:id/follow", authenticateToken, async (req, res) => {
+    const userId = req.user.uid;
+    const pageId = req.params.id;
+    try {
+      const pageRows = await dbQuery("SELECT * FROM pages WHERE id = ?", [pageId]);
+      if (pageRows.length === 0) return res.status(404).json({ error: "Page not found" });
+      
+      let followers = [];
+      try {
+        followers = typeof pageRows[0].followers === 'string' ? JSON.parse(pageRows[0].followers || '[]') : (pageRows[0].followers || []);
+      } catch (e) {}
+      
+      const isFollowing = followers.includes(userId);
+      
+      if (isFollowing) {
+        followers = followers.filter((id) => id !== userId);
+      } else {
+        followers.push(userId);
+      }
+      
+      await dbQuery("UPDATE pages SET followers = ? WHERE id = ?", [JSON.stringify(followers), pageId]);
+      
+      // Notify owner if following
+      if (!isFollowing && pageRows[0].ownerId !== userId) {
+        const notificationId = Date.now().toString();
+        await dbQuery(
+          "INSERT INTO notifications (id, receiverId, senderId, type, text) VALUES (?, ?, ?, ?, ?)",
+          [notificationId, pageRows[0].ownerId, userId, 'page_follow', `Someone followed your page ${pageRows[0].title}`]
+        );
+      }
+      
+      const updatedPage = await dbQuery("SELECT * FROM pages WHERE id = ?", [pageId]);
+      res.json({
+        ...updatedPage[0],
+        followers,
+        likes: typeof updatedPage[0].likes === 'string' ? JSON.parse(updatedPage[0].likes || '[]') : (updatedPage[0].likes || [])
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to follow page" });
+    }
+  });
+
+  app.post("/api/pages/:id/like", authenticateToken, async (req, res) => {
+    const userId = req.user.uid;
+    const pageId = req.params.id;
+    try {
+      const pageRows = await dbQuery("SELECT * FROM pages WHERE id = ?", [pageId]);
+      if (pageRows.length === 0) return res.status(404).json({ error: "Page not found" });
+      
+      let likes = [];
+      try {
+        likes = typeof pageRows[0].likes === 'string' ? JSON.parse(pageRows[0].likes || '[]') : (pageRows[0].likes || []);
+      } catch (e) {}
+      
+      const isLiked = likes.includes(userId);
+      
+      if (isLiked) {
+        likes = likes.filter((id) => id !== userId);
+      } else {
+        likes.push(userId);
+      }
+      
+      await dbQuery("UPDATE pages SET likes = ? WHERE id = ?", [JSON.stringify(likes), pageId]);
+      
+      // Notify owner if liked
+      if (!isLiked && pageRows[0].ownerId !== userId) {
+        const notificationId = Date.now().toString();
+        await dbQuery(
+          "INSERT INTO notifications (id, receiverId, senderId, type, text) VALUES (?, ?, ?, ?, ?)",
+          [notificationId, pageRows[0].ownerId, userId, 'like', `Someone liked your page ${pageRows[0].title}`]
+        );
+      }
+      
+      const updatedPage = await dbQuery("SELECT * FROM pages WHERE id = ?", [pageId]);
+      res.json({
+        ...updatedPage[0],
+        followers: typeof updatedPage[0].followers === 'string' ? JSON.parse(updatedPage[0].followers || '[]') : (updatedPage[0].followers || []),
+        likes
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to like page" });
+    }
+  });
+
+  app.get("/api/groups", async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM groups ORDER BY createdAt DESC");
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch groups" });
+    }
+  });
+
+  app.post("/api/groups", authenticateToken, async (req, res) => {
+    const { title, description, privacy } = req.body;
+    const ownerId = req.user.uid;
+    const id = Date.now().toString();
+    const members = JSON.stringify([ownerId]);
+    
+    try {
+      await dbQuery(
+        "INSERT INTO groups (id, ownerId, title, description, privacy, members) VALUES (?, ?, ?, ?, ?, ?)",
+        [id, ownerId, title, description, privacy, members]
+      );
+      const rows = await dbQuery("SELECT * FROM groups WHERE id = ?", [id]);
+      res.json(rows[0]);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create group" });
+    }
+  });
+
+  app.get("/api/groups/:id", async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM groups WHERE id = ?", [req.params.id]);
+      if (rows.length === 0) return res.status(404).json({ error: "Group not found" });
+      res.json(rows[0]);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch group" });
+    }
+  });
+
+  app.post("/api/groups/:id/join", authenticateToken, async (req, res) => {
+    const userId = req.user.uid;
+    const groupId = req.params.id;
+    try {
+      const groupRows = await dbQuery("SELECT * FROM groups WHERE id = ?", [groupId]);
+      if (groupRows.length === 0) return res.status(404).json({ error: "Group not found" });
+      
+      let members = [];
+      try {
+        members = typeof groupRows[0].members === 'string' ? JSON.parse(groupRows[0].members || '[]') : (groupRows[0].members || []);
+      } catch (e) {}
+      
+      const isMember = members.includes(userId);
+      
+      if (isMember) {
+        members = members.filter((id) => id !== userId);
+      } else {
+        members.push(userId);
+      }
+      
+      await dbQuery("UPDATE groups SET members = ? WHERE id = ?", [JSON.stringify(members), groupId]);
+      
+      // Notify owner if joining
+      if (!isMember && groupRows[0].ownerId !== userId) {
+        const notificationId = Date.now().toString();
+        await dbQuery(
+          "INSERT INTO notifications (id, receiverId, senderId, type, text) VALUES (?, ?, ?, ?, ?)",
+          [notificationId, groupRows[0].ownerId, userId, 'group_join', `Someone joined your group ${groupRows[0].title}`]
+        );
+      }
+      
+      const updatedGroup = await dbQuery("SELECT * FROM groups WHERE id = ?", [groupId]);
+      res.json(updatedGroup[0]);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to join group" });
+    }
+  });
+
+  app.get("/api/products", async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM products ORDER BY createdAt DESC");
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch products" });
+    }
+  });
+
+  app.post("/api/products", authenticateToken, async (req, res) => {
+    const { title, description, price, image, category } = req.body;
+    const userId = req.user.uid;
+    const authorName = req.user.name;
+    const id = Date.now().toString();
+    
+    try {
+      await dbQuery(
+        "INSERT INTO products (id, userId, authorName, title, description, price, image, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [id, userId, authorName, title, description, price, image, category]
+      );
+      const rows = await dbQuery("SELECT * FROM products WHERE id = ?", [id]);
+      res.json(rows[0]);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create product" });
+    }
+  });
+
+  app.delete("/api/products/:id", authenticateToken, async (req, res) => {
+    try {
+      const productId = req.params.id;
+      const userId = req.user.uid;
+      
+      const rows = await dbQuery("SELECT * FROM products WHERE id = ?", [productId]);
+      if (rows.length === 0) return res.status(404).json({ error: "Product not found" });
+      
+      // Only author or admin can delete
+      if (rows[0].userId !== userId && req.user.role !== 'admin') {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      await dbQuery("DELETE FROM products WHERE id = ?", [productId]);
+      res.json({ message: "Product deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete product" });
+    }
+  });
+
+  app.post("/api/products/:id/save", authenticateToken, async (req, res) => {
+    const userId = req.user.uid;
+    const productId = req.params.id;
+    try {
+      const userRows = await dbQuery("SELECT savedProducts FROM users WHERE uid = ?", [userId]);
+      let savedProducts = [];
+      try {
+        savedProducts = typeof userRows[0]?.savedProducts === 'string' 
+          ? JSON.parse(userRows[0].savedProducts || '[]') 
+          : (userRows[0]?.savedProducts || []);
+      } catch (e) {}
+      
+      if (savedProducts.includes(productId)) {
+        savedProducts = savedProducts.filter((id) => id !== productId);
+      } else {
+        savedProducts.push(productId);
+      }
+      
+      await dbQuery("UPDATE users SET savedProducts = ? WHERE uid = ?", [JSON.stringify(savedProducts), userId]);
+      res.json({ message: "Product save status updated", savedProducts });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save product" });
+    }
+  });
+
+  const isAdmin = (req, res, next) => {
+    if (req.user && req.user.role === 'admin') {
+      next();
+    } else {
+      res.status(403).json({ error: "Admin access required" });
+    }
+  };
+
+  app.post("/api/admin/settings", authenticateToken, isAdmin, async (req, res) => {
+    const { pointValue, announcement, adHtml } = req.body;
+    try {
+      await dbQuery(
+        "UPDATE settings SET pointValue = ?, announcement = ?, adHtml = ? WHERE id = 'site'",
+        [pointValue, announcement, adHtml]
+      );
+      res.json({ message: "Settings updated" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update settings" });
+    }
+  });
+
+  app.get("/api/admin/users", authenticateToken, isAdmin, async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM users LIMIT 50");
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.get("/api/admin/posts", authenticateToken, isAdmin, async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM posts ORDER BY createdAt DESC LIMIT 50");
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch posts" });
+    }
+  });
+
+  app.get("/api/admin/reports", authenticateToken, isAdmin, async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM reports ORDER BY createdAt DESC LIMIT 50");
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch reports" });
+    }
+  });
+
+  app.get("/api/admin/adverts", authenticateToken, isAdmin, async (req, res) => {
+    try {
+      const rows = await dbQuery("SELECT * FROM adverts ORDER BY createdAt DESC LIMIT 50");
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch adverts" });
+    }
+  });
+
+  app.post("/api/admin/users/:uid/promote", authenticateToken, isAdmin, async (req, res) => {
+    try {
+      await dbQuery("UPDATE users SET role = 'admin' WHERE uid = ?", [req.params.uid]);
+      res.json({ message: "User promoted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to promote user" });
+    }
+  });
+
+  app.delete("/api/admin/posts/:id", authenticateToken, isAdmin, async (req, res) => {
+    try {
+      await dbQuery("DELETE FROM posts WHERE id = ?", [req.params.id]);
+      res.json({ message: "Post deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete post" });
+    }
+  });
+
+  app.post("/api/admin/users/:uid/verify", authenticateToken, isAdmin, async (req, res) => {
+    const { approve } = req.body;
+    try {
+      await dbQuery(
+        "UPDATE users SET isVerified = ?, isVerifiedPending = 0 WHERE uid = ?",
+        [approve ? 1 : 0, req.params.uid]
+      );
+      res.json({ message: "Verification processed" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to verify user" });
+    }
+  });
+
+  app.post("/api/admin/users/:uid/ban", authenticateToken, isAdmin, async (req, res) => {
+    const { ban } = req.body;
+    try {
+      await dbQuery("UPDATE users SET isBanned = ? WHERE uid = ?", [ban ? 1 : 0, req.params.uid]);
+      res.json({ message: "Ban status updated" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update ban status" });
+    }
+  });
+
+  app.post("/api/admin/users/:uid/suspend", authenticateToken, isAdmin, async (req, res) => {
+    const { duration, until } = req.body;
+    try {
+      await dbQuery(
+        "UPDATE users SET isSuspended = ?, suspensionUntil = ? WHERE uid = ?",
+        [duration > 0 ? 1 : 0, until, req.params.uid]
+      );
+      res.json({ message: "Suspension status updated" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update suspension status" });
+    }
+  });
+
+  app.post("/api/admin/reports/:id/resolve", authenticateToken, isAdmin, async (req, res) => {
+    try {
+      await dbQuery("UPDATE reports SET status = 'resolved' WHERE id = ?", [req.params.id]);
+      res.json({ message: "Report resolved" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to resolve report" });
+    }
+  });
+
+  app.post("/api/admin/adverts/:id/approve", authenticateToken, isAdmin, async (req, res) => {
+    const { approve } = req.body;
+    try {
+      await dbQuery(
+        "UPDATE adverts SET status = ? WHERE id = ?",
+        [approve ? 'active' : 'rejected', req.params.id]
+      );
+      res.json({ message: "Advert status updated" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update advert status" });
+    }
+  });
+
+  app.post("/api/admin/users/:uid/fund", authenticateToken, isAdmin, async (req, res) => {
+    const { amount } = req.body;
+    const id = Date.now().toString();
+    try {
+      await dbQuery("UPDATE users SET walletBalance = walletBalance + ? WHERE uid = ?", [amount, req.params.uid]);
+      await dbQuery(
+        "INSERT INTO transactions (id, userId, amount, type, description, status) VALUES (?, ?, ?, ?, ?, ?)",
+        [id, req.params.uid, amount, 'deposit', 'Admin Funding', 'completed']
+      );
+      res.json({ message: "User funded" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fund user" });
     }
   });
 
