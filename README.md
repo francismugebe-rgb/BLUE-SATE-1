@@ -73,3 +73,4 @@ This project includes a `.cpanel.yml` file for automatic deployment via cPanel's
 ## License
 
 MIT
+MUGEBE
