@@ -1644,36 +1644,63 @@ async function startServer() {
 
   // Vite middleware
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    console.log("Initializing Vite server in development mode...");
+    try {
+      const vite = await createViteServer({
+        server: { 
+          middlewareMode: true,
+          watch: {
+            // Use polling if needed, but usually not required in this environment
+            usePolling: true,
+            interval: 100
+          }
+        },
+        appType: "spa",
+        root: __dirname,
+      });
+      console.log("Vite server initialized successfully");
+      app.use(vite.middlewares);
 
-    app.get("*", async (req, res, next) => {
-      const url = req.originalUrl;
-      
-      // Only handle requests that are likely to be for the SPA (no file extension, or ends in .html)
-      // or explicitly accept HTML.
-      const isFile = url.includes(".") && !url.endsWith(".html");
-      const acceptsHtml = req.headers.accept && req.headers.accept.includes("text/html");
+      // Fall-through logger to see what Vite is NOT handling
+      app.use((req, res, next) => {
+        if (!req.url.startsWith('/api') && !req.url.startsWith('/uploads')) {
+          console.log(`[DEBUG] Request fell through Vite: ${req.url}`);
+        }
+        next();
+      });
 
-      if (isFile && !acceptsHtml) {
-        // console.log(`Catch-all: Skipping non-HTML request: ${url}`);
-        return next();
-      }
+      app.get("*", async (req, res, next) => {
+        const url = req.originalUrl;
+        
+        // Only handle requests that are likely to be for the SPA (no file extension, or ends in .html)
+        // or explicitly accept HTML.
+        const isFile = url.includes(".") && !url.endsWith(".html");
+        const acceptsHtml = req.headers.accept && req.headers.accept.includes("text/html");
 
-      console.log(`Catch-all: Handling request for ${url}`);
-      try {
-        let template = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf-8");
-        template = await vite.transformIndexHtml(url, template);
-        res.status(200).set({ "Content-Type": "text/html" }).end(template);
-      } catch (e) {
-        console.error('Vite transform error:', e);
-        vite.ssrFixStacktrace(e);
-        next(e);
-      }
-    });
+        if (isFile && !acceptsHtml) {
+          console.log(`[DEBUG] Catch-all: Skipping non-HTML request: ${url}`);
+          return next();
+        }
+
+        console.log(`[DEBUG] Catch-all: Handling request for ${url}`);
+        try {
+          const indexPath = path.resolve(__dirname, "index.html");
+          if (!fs.existsSync(indexPath)) {
+            console.error("index.html not found at:", indexPath);
+            return res.status(404).send("index.html not found");
+          }
+          let template = fs.readFileSync(indexPath, "utf-8");
+          template = await vite.transformIndexHtml(url, template);
+          res.status(200).set({ "Content-Type": "text/html" }).end(template);
+        } catch (e) {
+          console.error('Vite transform error:', e);
+          vite.ssrFixStacktrace(e);
+          next(e);
+        }
+      });
+    } catch (e) {
+      console.error("CRITICAL: Failed to initialize Vite server:", e);
+    }
   } else {
     const distPath = path.join(process.cwd(), "dist");
     console.log(`Production mode: serving from ${distPath}`);
