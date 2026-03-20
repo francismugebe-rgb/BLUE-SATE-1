@@ -478,6 +478,7 @@ async function initDB() {
       }
     } catch (error) {
       console.error("Failed to initialize MySQL, falling back to SQLite:", error);
+      pool = null;
       setupSQLite();
     }
   } else {
