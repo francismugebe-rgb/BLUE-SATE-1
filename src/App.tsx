@@ -42,42 +42,57 @@ const AppContent: React.FC = () => {
   console.log('AppContent is rendering...');
   const errorDisplay = document.getElementById('error-display');
   if (errorDisplay) errorDisplay.innerText = 'AppContent is rendering...';
-  const { profile } = useAuth();
-  return (
-    <ChatProvider currentUserId={profile?.uid}>
-      <Router>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          
-          <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route path="/discover" element={<Discover />} />
-            <Route path="/feed" element={<Feed />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/profile/:id" element={<Profile />} />
-            <Route path="/messages" element={<Messages />} />
-            <Route path="/wallet" element={<Wallet />} />
-            <Route path="/pages" element={<Pages />} />
-            <Route path="/pages/:id" element={<PageDetails />} />
-            <Route path="/groups" element={<Groups />} />
-            <Route path="/groups/:id" element={<GroupDetails />} />
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/chat/:id" element={<Chat />} />
-            <Route path="/matches" element={<Matches />} />
-            <Route path="/reels" element={<Reels />} />
-            <Route path="/market" element={<Market />} />
-            <Route path="/settings" element={<Settings />} />
-          </Route>
+  
+  try {
+    const { profile, loading } = useAuth();
+    console.log('Auth profile:', profile, 'loading:', loading);
+    if (errorDisplay) errorDisplay.innerText = `AppContent rendering (loading: ${loading})`;
+    
+    if (loading) {
+      return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    }
+    return (
+      <ChatProvider currentUserId={profile?.uid}>
+        <Router>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            
+            <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+              <Route path="/discover" element={<Discover />} />
+              <Route path="/feed" element={<Feed />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/profile/:id" element={<Profile />} />
+              <Route path="/messages" element={<Messages />} />
+              <Route path="/wallet" element={<Wallet />} />
+              <Route path="/pages" element={<Pages />} />
+              <Route path="/pages/:id" element={<PageDetails />} />
+              <Route path="/groups" element={<Groups />} />
+              <Route path="/groups/:id" element={<GroupDetails />} />
+              <Route path="/chat" element={<Chat />} />
+              <Route path="/chat/:id" element={<Chat />} />
+              <Route path="/matches" element={<Matches />} />
+              <Route path="/reels" element={<Reels />} />
+              <Route path="/market" element={<Market />} />
+              <Route path="/settings" element={<Settings />} />
+            </Route>
 
-          <Route path="/admin" element={<AdminRoute><Layout admin /></AdminRoute>}>
-            <Route index element={<AdminDashboard />} />
-          </Route>
-        </Routes>
-        <ChatOverlay />
-      </Router>
-    </ChatProvider>
-  );
+            <Route path="/admin" element={<AdminRoute><Layout admin /></AdminRoute>}>
+              <Route index element={<AdminDashboard />} />
+            </Route>
+          </Routes>
+          <ChatOverlay />
+        </Router>
+      </ChatProvider>
+    );
+  } catch (error) {
+    console.error('AppContent render error:', error);
+    if (errorDisplay) {
+      errorDisplay.innerText = 'AppContent Error: ' + (error instanceof Error ? error.message : String(error));
+    }
+    return <div>Error loading application. Check console.</div>;
+  }
 };
 
 function App() {

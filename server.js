@@ -1634,6 +1634,14 @@ async function startServer() {
     }
   });
 
+  // Request logging
+  app.use((req, res, next) => {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[DEBUG] Request: ${req.method} ${req.url}`);
+    }
+    next();
+  });
+
   // Vite middleware
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -1651,7 +1659,7 @@ async function startServer() {
       const acceptsHtml = req.headers.accept && req.headers.accept.includes("text/html");
 
       if (isFile && !acceptsHtml) {
-        console.log(`Catch-all: Skipping non-HTML request: ${url}`);
+        // console.log(`Catch-all: Skipping non-HTML request: ${url}`);
         return next();
       }
 
@@ -1661,6 +1669,7 @@ async function startServer() {
         template = await vite.transformIndexHtml(url, template);
         res.status(200).set({ "Content-Type": "text/html" }).end(template);
       } catch (e) {
+        console.error('Vite transform error:', e);
         vite.ssrFixStacktrace(e);
         next(e);
       }
