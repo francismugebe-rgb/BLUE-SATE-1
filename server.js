@@ -574,6 +574,15 @@ async function startServer() {
     });
   });
 
+  // --- DATABASE STATUS ---
+  app.get("/api/db-status", (req, res) => {
+    res.json({
+      database: pool ? "MySQL" : "SQLite",
+      connected: true,
+      mysql_configured: !!(process.env.DB_HOST && process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_NAME)
+    });
+  });
+
   // --- AUTH ROUTES ---
   app.post("/api/auth/register", async (req, res) => {
     const { email, password, name } = req.body;
