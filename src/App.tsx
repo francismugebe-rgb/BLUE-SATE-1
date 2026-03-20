@@ -40,6 +40,8 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const AppContent: React.FC = () => {
   console.log('AppContent is rendering...');
+  const errorDisplay = document.getElementById('error-display');
+  if (errorDisplay) errorDisplay.innerText = 'AppContent is rendering...';
   const { profile } = useAuth();
   return (
     <ChatProvider currentUserId={profile?.uid}>

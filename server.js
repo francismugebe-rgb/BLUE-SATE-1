@@ -1644,6 +1644,18 @@ async function startServer() {
 
     app.get("*", async (req, res, next) => {
       const url = req.originalUrl;
+      
+      // Only handle requests that are likely to be for the SPA (no file extension, or ends in .html)
+      // or explicitly accept HTML.
+      const isFile = url.includes(".") && !url.endsWith(".html");
+      const acceptsHtml = req.headers.accept && req.headers.accept.includes("text/html");
+
+      if (isFile && !acceptsHtml) {
+        console.log(`Catch-all: Skipping non-HTML request: ${url}`);
+        return next();
+      }
+
+      console.log(`Catch-all: Handling request for ${url}`);
       try {
         let template = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf-8");
         template = await vite.transformIndexHtml(url, template);
