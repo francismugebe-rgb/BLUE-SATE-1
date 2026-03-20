@@ -37,7 +37,6 @@ A full-stack social networking and dating application built with React, Express,
    Key variables to configure:
    - `JWT_SECRET`: A secret key for signing tokens.
    - `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`: MySQL credentials (optional, falls back to SQLite).
-   - `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`: For payment integration.
 
 ## Running the Application
 

@@ -23,12 +23,6 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
-const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
-const PAYPAL_API = process.env.PAYPAL_MODE === 'live' 
-  ? 'https://api-m.paypal.com' 
-  : 'https://api-m.sandbox.paypal.com';
-
 const JWT_SECRET = process.env.JWT_SECRET || "heartconnect_secret_key_123";
 
 // SQLite fallback
@@ -513,22 +507,6 @@ function authenticateToken(req, res, next) {
   });
 }
 
-async function getPayPalAccessToken() {
-  if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
-    throw new Error("PayPal credentials not configured");
-  }
-  const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
-  const response = await fetch(`${PAYPAL_API}/v1/oauth2/token`, {
-    method: 'POST',
-    body: 'grant_type=client_credentials',
-    headers: {
-      Authorization: `Basic ${auth}`,
-    },
-  });
-  const data = await response.json();
-  return data.access_token;
-}
-
 async function dbQuery(query, params = []) {
   if (pool) {
     const [rows] = await pool.query(query, params);
@@ -1001,72 +979,6 @@ async function startServer() {
       res.json({ isMatch: false });
     } catch (error) {
       res.status(500).json({ error: "Failed to process swipe" });
-    }
-  });
-
-  // PayPal Integration
-  app.post("/api/paypal/create-order", authenticateToken, async (req, res) => {
-    try {
-      const { amount } = req.body;
-      const accessToken = await getPayPalAccessToken();
-      const response = await fetch(`${PAYPAL_API}/v2/checkout/orders`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          intent: 'CAPTURE',
-          purchase_units: [
-            {
-              amount: {
-                currency_code: 'USD',
-                value: amount,
-              },
-            },
-          ],
-        }),
-      });
-      const data = await response.json();
-      res.json(data);
-    } catch (error) {
-      console.error("PayPal Create Order Error:", error);
-      res.status(500).json({ error: "Failed to create PayPal order" });
-    }
-  });
-
-  app.post("/api/paypal/capture-order", authenticateToken, async (req, res) => {
-    try {
-      const { orderID } = req.body;
-      const accessToken = await getPayPalAccessToken();
-      const response = await fetch(`${PAYPAL_API}/v2/checkout/orders/${orderID}/capture`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-      const data = await response.json();
-      
-      if (data.status === 'COMPLETED') {
-        const userId = req.user.uid;
-        const amount = parseFloat(data.purchase_units[0].payments.captures[0].amount.value);
-        
-        // Update user balance
-        await dbQuery("UPDATE users SET walletBalance = walletBalance + ? WHERE uid = ?", [amount, userId]);
-        
-        // Record transaction
-        const txId = Date.now().toString();
-        await dbQuery(
-          "INSERT INTO transactions (id, userId, amount, type, description, status) VALUES (?, ?, ?, ?, ?, ?)",
-          [txId, userId, amount, 'deposit', 'PayPal Deposit', 'completed']
-        );
-      }
-      
-      res.json(data);
-    } catch (error) {
-      console.error("PayPal Capture Order Error:", error);
-      res.status(500).json({ error: "Failed to capture PayPal order" });
     }
   });
 

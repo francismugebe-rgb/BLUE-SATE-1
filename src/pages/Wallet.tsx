@@ -40,51 +40,7 @@ const Wallet: React.FC = () => {
   }, []);
 
   const handleDeposit = async () => {
-    if (!profile || !amount) return;
-    const val = parseFloat(amount);
-    if (isNaN(val) || val <= 0) return;
-
-    try {
-      const response = await fetch('/api/paypal/create-order', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ amount: val.toFixed(2) }),
-      });
-      const order = await response.json();
-
-      if (order.id) {
-        const confirmPayment = window.confirm(`Simulate PayPal Payment for ${formatCurrency(val)}? (Order ID: ${order.id})`);
-        if (confirmPayment) {
-          const captureResponse = await fetch('/api/paypal/capture-order', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({ orderID: order.id }),
-          });
-          const captureData = await captureResponse.json();
-
-          if (captureData.status === 'COMPLETED') {
-            setAmount('');
-            // Refresh transactions
-            const txRes = await fetch('/api/transactions', {
-              headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (txRes.ok) setTransactions(await txRes.json());
-            alert("Deposit successful!");
-          } else {
-            alert("Payment failed or was not completed.");
-          }
-        }
-      }
-    } catch (err) {
-      console.error('PayPal Error:', err);
-      alert("PayPal integration error. Please check your credentials.");
-    }
+    alert("Manual deposit system coming soon. Please contact support.");
   };
 
   const handleConvertPoints = async () => {
@@ -238,10 +194,10 @@ const Wallet: React.FC = () => {
           </div>
           <button 
             onClick={handleDeposit}
-            className="bg-[#0070ba] text-white px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-[#005ea6] transition-all shadow-lg shadow-blue-500/20"
+            className="bg-[var(--bg-input)] text-[var(--text-primary)] px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-[var(--bg-card)] transition-all border border-[var(--border-color)]"
           >
             <CreditCard className="w-5 h-5" />
-            <span>Deposit with PayPal</span>
+            <span>Manual Deposit</span>
           </button>
         </div>
       </div>
