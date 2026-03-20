@@ -222,6 +222,7 @@ function setupSQLite() {
 
 // MySQL Connection
 let pool = null;
+let mysqlError = null;
 async function initDB() {
   if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_NAME) {
     try {
@@ -472,6 +473,7 @@ async function initDB() {
       }
     } catch (error) {
       console.error("Failed to initialize MySQL, falling back to SQLite:", error);
+      mysqlError = error.message;
       pool = null;
       setupSQLite();
     }
@@ -579,7 +581,8 @@ async function startServer() {
     res.json({
       database: pool ? "MySQL" : "SQLite",
       connected: true,
-      mysql_configured: !!(process.env.DB_HOST && process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_NAME)
+      mysql_configured: !!(process.env.DB_HOST && process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_NAME),
+      mysql_error: mysqlError
     });
   });
 
