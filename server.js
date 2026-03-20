@@ -86,7 +86,7 @@ function setupSQLite() {
       FOREIGN KEY (ownerId) REFERENCES users(uid) ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS groups (
+    CREATE TABLE IF NOT EXISTS \`groups\` (
       id TEXT PRIMARY KEY,
       ownerId TEXT NOT NULL,
       title TEXT NOT NULL,
@@ -134,7 +134,7 @@ function setupSQLite() {
       imageUrl TEXT,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (userId) REFERENCES users(uid) ON DELETE CASCADE,
-      FOREIGN KEY (groupId) REFERENCES groups(id) ON DELETE SET NULL,
+      FOREIGN KEY (groupId) REFERENCES \`groups\`(id) ON DELETE SET NULL,
       FOREIGN KEY (pageId) REFERENCES pages(id) ON DELETE SET NULL
     );
 
@@ -302,7 +302,7 @@ async function initDB() {
         `);
 
         await connection.query(`
-          CREATE TABLE IF NOT EXISTS groups (
+          CREATE TABLE IF NOT EXISTS \`groups\` (
             id VARCHAR(255) PRIMARY KEY,
             ownerId VARCHAR(255) NOT NULL,
             title VARCHAR(255) NOT NULL,
@@ -362,7 +362,7 @@ async function initDB() {
             imageUrl TEXT,
             createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (userId) REFERENCES users(uid) ON DELETE CASCADE,
-            FOREIGN KEY (groupId) REFERENCES groups(id) ON DELETE SET NULL,
+            FOREIGN KEY (groupId) REFERENCES \`groups\`(id) ON DELETE SET NULL,
             FOREIGN KEY (pageId) REFERENCES pages(id) ON DELETE SET NULL
           )
         `);
@@ -1344,7 +1344,7 @@ async function startServer() {
 
   app.get("/api/groups", async (req, res) => {
     try {
-      const rows = await dbQuery("SELECT * FROM groups ORDER BY createdAt DESC");
+      const rows = await dbQuery("SELECT * FROM `groups` ORDER BY createdAt DESC");
       res.json(rows);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch groups" });
@@ -1359,10 +1359,10 @@ async function startServer() {
     
     try {
       await dbQuery(
-        "INSERT INTO groups (id, ownerId, title, description, privacy, members) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO `groups` (id, ownerId, title, description, privacy, members) VALUES (?, ?, ?, ?, ?, ?)",
         [id, ownerId, title, description, privacy, members]
       );
-      const rows = await dbQuery("SELECT * FROM groups WHERE id = ?", [id]);
+      const rows = await dbQuery("SELECT * FROM `groups` WHERE id = ?", [id]);
       res.json(rows[0]);
     } catch (error) {
       res.status(500).json({ error: "Failed to create group" });
@@ -1371,7 +1371,7 @@ async function startServer() {
 
   app.get("/api/groups/:id", async (req, res) => {
     try {
-      const rows = await dbQuery("SELECT * FROM groups WHERE id = ?", [req.params.id]);
+      const rows = await dbQuery("SELECT * FROM `groups` WHERE id = ?", [req.params.id]);
       if (rows.length === 0) return res.status(404).json({ error: "Group not found" });
       res.json(rows[0]);
     } catch (error) {
@@ -1383,7 +1383,7 @@ async function startServer() {
     const userId = req.user.uid;
     const groupId = req.params.id;
     try {
-      const groupRows = await dbQuery("SELECT * FROM groups WHERE id = ?", [groupId]);
+      const groupRows = await dbQuery("SELECT * FROM `groups` WHERE id = ?", [groupId]);
       if (groupRows.length === 0) return res.status(404).json({ error: "Group not found" });
       
       let members = [];
@@ -1399,7 +1399,7 @@ async function startServer() {
         members.push(userId);
       }
       
-      await dbQuery("UPDATE groups SET members = ? WHERE id = ?", [JSON.stringify(members), groupId]);
+      await dbQuery("UPDATE `groups` SET members = ? WHERE id = ?", [JSON.stringify(members), groupId]);
       
       // Notify owner if joining
       if (!isMember && groupRows[0].ownerId !== userId) {
@@ -1410,7 +1410,7 @@ async function startServer() {
         );
       }
       
-      const updatedGroup = await dbQuery("SELECT * FROM groups WHERE id = ?", [groupId]);
+      const updatedGroup = await dbQuery("SELECT * FROM `groups` WHERE id = ?", [groupId]);
       res.json(updatedGroup[0]);
     } catch (error) {
       res.status(500).json({ error: "Failed to join group" });
