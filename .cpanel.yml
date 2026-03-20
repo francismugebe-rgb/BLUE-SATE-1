@@ -2,10 +2,12 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/jywxwido/heartconnect.ruwarehabcentre.com
-    - echo "Starting deploy..."
-    - /bin/cp -R * $DEPLOYPATH
-    - cd $DEPLOYPATH
+    - echo "Checking environment..."
+    - node -v
+    - npm -v
+    - echo "Installing dependencies..."
     - npm install
-    - npm run build || true
+    - echo "Building application..."
+    - npm run build
     - mkdir -p tmp
     - touch tmp/restart.txt
