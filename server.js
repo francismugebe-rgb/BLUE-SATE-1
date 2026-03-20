@@ -479,6 +479,7 @@ async function initDB() {
     console.log("MySQL not configured, using SQLite.");
     setupSQLite();
   }
+  console.log("Database initialization complete.");
 }
 
 // Multer Configuration
@@ -531,6 +532,8 @@ async function dbQuery(query, params = []) {
 async function startServer() {
   await initDB();
   
+  console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode`);
+  
   const app = express();
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
@@ -544,6 +547,12 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
   app.use("/uploads", express.static(uploadsDir));
+
+  // Request logging middleware
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
 
   // Socket.io logic
   const userSockets = new Map(); // userId -> socketId
@@ -1632,10 +1641,25 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
+
+    app.get("*", async (req, res, next) => {
+      const url = req.originalUrl;
+      try {
+        let template = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf-8");
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
+    console.log(`Production mode: serving from ${distPath}`);
+    console.log(`Current working directory: ${process.cwd()}`);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
+      console.log(`Serving index.html for request: ${req.url}`);
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
