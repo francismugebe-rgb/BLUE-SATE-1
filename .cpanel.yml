@@ -5,6 +5,9 @@ deployment:
     - echo "Checking environment..."
     - node -v
     - npm -v
+    - echo "Starting deployment..."
+    - /bin/cp -R . $DEPLOYPATH
+    - cd $DEPLOYPATH
     - echo "Installing dependencies..."
     - npm install
     - echo "Building application..."
