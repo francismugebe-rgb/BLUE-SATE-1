@@ -6,12 +6,21 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const AdminDashboard: React.FC = () => {
   const { logout } = useAuth();
-  const stats = [
-    { label: 'Total Users', value: '12,450', icon: Users, color: 'bg-blue-500' },
-    { label: 'Active Matches', value: '3,210', icon: Heart, color: 'bg-pink-500' },
-    { label: 'Messages Sent', value: '45.2k', icon: MessageSquare, color: 'bg-purple-500' },
-    { label: 'Wallet Volume', value: '$128.5k', icon: Wallet, color: 'bg-green-500' },
-  ];
+  const [stats, setStats] = React.useState([
+    { label: 'Total Users', value: '0', icon: Users, color: 'bg-blue-500' },
+    { label: 'Active Matches', value: '0', icon: Heart, color: 'bg-pink-500' },
+    { label: 'Messages Sent', value: '0', icon: MessageSquare, color: 'bg-purple-500' },
+    { label: 'Wallet Volume', value: '$0', icon: Wallet, color: 'bg-green-500' },
+  ]);
+
+  const [recentUsers, setRecentUsers] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    // In a real app, we would listen to collections here
+    // For now, we'll just show empty state as requested "Remove all fake data"
+    setLoading(false);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-10">
@@ -77,41 +86,44 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {[
-                    { name: 'Sarah Johnson', email: 'sarah@example.com', status: 'Verified', date: '2 mins ago' },
-                    { name: 'Michael Chen', email: 'm.chen@example.com', status: 'Pending', date: '15 mins ago' },
-                    { name: 'Emma Wilson', email: 'emma.w@example.com', status: 'Verified', date: '1 hour ago' },
-                    { name: 'Alex Rivera', email: 'arivera@example.com', status: 'Banned', date: '3 hours ago' },
-                  ].map((user, i) => (
-                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-8 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-slate-100 rounded-full overflow-hidden">
-                            <img src={`https://picsum.photos/seed/${user.name}/100/100`} alt="" referrerPolicy="no-referrer" />
+                  {recentUsers.length > 0 ? (
+                    recentUsers.map((user, i) => (
+                      <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-8 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-slate-100 rounded-full overflow-hidden">
+                              <img src={`https://picsum.photos/seed/${user.name}/100/100`} alt="" referrerPolicy="no-referrer" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-900">{user.name}</p>
+                              <p className="text-xs text-slate-500">{user.email}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-bold text-slate-900">{user.name}</p>
-                            <p className="text-xs text-slate-500">{user.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-8 py-4">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                          user.status === 'Verified' ? 'bg-green-100 text-green-600' :
-                          user.status === 'Pending' ? 'bg-amber-100 text-amber-600' :
-                          'bg-red-100 text-red-600'
-                        }`}>
-                          {user.status}
-                        </span>
-                      </td>
-                      <td className="px-8 py-4 text-sm text-slate-500 font-medium">{user.date}</td>
-                      <td className="px-8 py-4">
-                        <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                          <Settings className="w-4 h-4 text-slate-400" />
-                        </button>
+                        </td>
+                        <td className="px-8 py-4">
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            user.status === 'Verified' ? 'bg-green-100 text-green-600' :
+                            user.status === 'Pending' ? 'bg-amber-100 text-amber-600' :
+                            'bg-red-100 text-red-600'
+                          }`}>
+                            {user.status}
+                          </span>
+                        </td>
+                        <td className="px-8 py-4 text-sm text-slate-500 font-medium">{user.date}</td>
+                        <td className="px-8 py-4">
+                          <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                            <Settings className="w-4 h-4 text-slate-400" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-8 py-12 text-center text-slate-400 font-medium">
+                        No recent registrations found.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -148,17 +160,7 @@ const AdminDashboard: React.FC = () => {
             <div className="mt-10">
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4">Recent Logs</h3>
               <div className="space-y-3">
-                {[
-                  'New user registration: sarah@example.com',
-                  'Match found: Michael & Sarah',
-                  'System backup completed successfully',
-                  'Wallet transaction: $50.00 from Emma',
-                ].map((log, i) => (
-                  <div key={i} className="flex gap-3 text-xs">
-                    <span className="text-slate-400 font-mono">10:42</span>
-                    <span className="text-slate-600 font-medium">{log}</span>
-                  </div>
-                ))}
+                <div className="text-xs text-slate-400 font-medium italic">No recent system logs.</div>
               </div>
             </div>
           </div>
