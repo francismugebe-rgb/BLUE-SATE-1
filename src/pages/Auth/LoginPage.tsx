@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Heart, Mail, Lock, ArrowRight, Github } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../../App';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login attempt:', { email, password });
-    // Auth logic will go here
+    login(email);
+    if (email === 'FRANCISMUGEBE@gmail.com') {
+      navigate('/admin');
+    } else {
+      navigate('/');
+    }
   };
 
   return (

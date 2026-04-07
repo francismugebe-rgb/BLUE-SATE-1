@@ -1,11 +1,65 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Heart, Sparkles, ArrowRight, Shield, Zap, Users } from 'lucide-react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { Heart, Sparkles, ArrowRight, Shield, Zap, Users, LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
 import LoginPage from './pages/Auth/LoginPage';
 import SignUpPage from './pages/Auth/SignUpPage';
+import AdminDashboard from './pages/Admin/AdminDashboard';
+
+// Basic Auth Context
+interface User {
+  email: string;
+  role: 'admin' | 'user';
+}
+
+interface AuthContextType {
+  user: User | null;
+  login: (email: string) => void;
+  logout: () => void;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  return context;
+};
+
+const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const login = (email: string) => {
+    const role = email === 'FRANCISMUGEBE@gmail.com' ? 'admin' : 'user';
+    const newUser: User = { email, role };
+    setUser(newUser);
+    localStorage.setItem('user', JSON.stringify(newUser));
+  };
+
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('user');
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+const ProtectedRoute: React.FC<{ children: React.ReactNode; role?: 'admin' | 'user' }> = ({ children, role }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" />;
+  if (role && user.role !== role) return <Navigate to="/" />;
+  return <>{children}</>;
+};
 
 const LandingPage: React.FC = () => {
+  const { user, logout } = useAuth();
   return (
     <div className="min-h-screen bg-white text-slate-900 overflow-x-hidden">
       {/* Navigation */}
@@ -25,12 +79,31 @@ const LandingPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            <Link to="/login" className="text-sm font-bold text-slate-700 hover:text-pink-500 transition-colors">
-              Sign In
-            </Link>
-            <Link to="/signup" className="bg-pink-500 text-white px-6 py-2.5 rounded-full text-sm font-bold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20 active:scale-95">
-              Get Started
-            </Link>
+            {user ? (
+              <>
+                {user.role === 'admin' && (
+                  <Link to="/admin" className="text-sm font-bold text-pink-500 hover:text-pink-600 transition-colors">
+                    Admin Panel
+                  </Link>
+                )}
+                <button 
+                  onClick={logout}
+                  className="flex items-center gap-2 text-sm font-bold text-slate-700 hover:text-pink-500 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="text-sm font-bold text-slate-700 hover:text-pink-500 transition-colors">
+                  Sign In
+                </Link>
+                <Link to="/signup" className="bg-pink-500 text-white px-6 py-2.5 rounded-full text-sm font-bold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20 active:scale-95">
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -123,13 +196,23 @@ const LandingPage: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignUpPage />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute role="admin">
+                <AdminDashboard />
+              </ProtectedRoute>
+            } 
+          />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 };
 
