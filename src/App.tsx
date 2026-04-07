@@ -1,55 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { Heart, Sparkles, ArrowRight, Shield, Zap, Users, LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
 import LoginPage from './pages/Auth/LoginPage';
 import SignUpPage from './pages/Auth/SignUpPage';
 import AdminDashboard from './pages/Admin/AdminDashboard';
-
-// Basic Auth Context
-interface User {
-  email: string;
-  role: 'admin' | 'user';
-}
-
-interface AuthContextType {
-  user: User | null;
-  login: (email: string) => void;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
-};
-
-const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  const login = (email: string) => {
-    const role = email === 'FRANCISMUGEBE@gmail.com' ? 'admin' : 'user';
-    const newUser: User = { email, role };
-    setUser(newUser);
-    localStorage.setItem('user', JSON.stringify(newUser));
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; role?: 'admin' | 'user' }> = ({ children, role }) => {
   const { user } = useAuth();
@@ -197,22 +153,38 @@ const LandingPage: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignUpPage />} />
-          <Route 
-            path="/admin" 
-            element={
-              <ProtectedRoute role="admin">
-                <AdminDashboard />
-              </ProtectedRoute>
-            } 
-          />
-        </Routes>
-      </Router>
+      <AuthConsumer />
     </AuthProvider>
+  );
+};
+
+const AuthConsumer: React.FC = () => {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignUpPage />} />
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute role="admin">
+              <AdminDashboard />
+            </ProtectedRoute>
+          } 
+        />
+      </Routes>
+    </Router>
   );
 };
 

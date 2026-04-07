@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique identifier for the user" },
+        "email": { "type": "string", "format": "email", "description": "The user's email address" },
+        "displayName": { "type": "string", "description": "The user's full name" },
+        "photoURL": { "type": "string", "format": "uri", "description": "The user's profile picture URL" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "The user's role in the system" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user account was created" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "A match between two users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique identifier for the match" },
+        "users": { "type": "array", "items": { "type": "string" }, "description": "The UIDs of the two users in the match" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the match was created" }
+      },
+      "required": ["id", "users", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents"
+    },
+    "/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Match documents"
+    }
+  }
+}

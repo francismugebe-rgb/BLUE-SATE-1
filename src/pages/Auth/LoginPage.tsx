@@ -2,21 +2,41 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart, Mail, Lock, ArrowRight, Github } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useAuth } from '../../App';
+import { useAuth } from '../../contexts/AuthContext';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(email);
-    if (email === 'FRANCISMUGEBE@gmail.com') {
-      navigate('/admin');
-    } else {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await login(email, password);
+      if (email === 'FRANCISMUGEBE@gmail.com') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to sign in. Please check your credentials.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError(null);
+    try {
+      await loginWithGoogle();
       navigate('/');
+    } catch (err: any) {
+      setError(err.message || 'Failed to sign in with Google.');
     }
   };
 
@@ -35,6 +55,12 @@ const LoginPage: React.FC = () => {
             <h1 className="text-3xl font-black text-slate-900">Welcome Back</h1>
             <p className="text-slate-500 mt-2">Sign in to continue your journey</p>
           </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 text-sm font-bold rounded-2xl">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
@@ -74,10 +100,11 @@ const LoginPage: React.FC = () => {
 
             <button 
               type="submit" 
-              className="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+              disabled={isSubmitting}
+              className="w-full bg-pink-500 hover:bg-pink-600 disabled:bg-pink-300 text-white font-bold py-4 rounded-2xl shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
             >
-              Sign In
-              <ArrowRight className="w-5 h-5" />
+              {isSubmitting ? 'Signing In...' : 'Sign In'}
+              {!isSubmitting && <ArrowRight className="w-5 h-5" />}
             </button>
           </form>
 
@@ -90,7 +117,10 @@ const LoginPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <button className="flex items-center justify-center gap-2 py-3 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors font-semibold text-slate-700">
+              <button 
+                onClick={handleGoogleLogin}
+                className="flex items-center justify-center gap-2 py-3 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors font-semibold text-slate-700"
+              >
                 <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" referrerPolicy="no-referrer" />
                 Google
               </button>

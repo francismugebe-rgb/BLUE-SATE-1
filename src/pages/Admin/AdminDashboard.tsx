@@ -2,7 +2,7 @@ import React from 'react';
 import { Users, Shield, Settings, BarChart3, Heart, MessageSquare, Wallet, LogOut, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../App';
+import { useAuth } from '../../contexts/AuthContext';
 
 const AdminDashboard: React.FC = () => {
   const { logout } = useAuth();
