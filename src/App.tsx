@@ -1,107 +1,28 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { ChatProvider } from './context/ChatContext';
-import { ThemeProvider } from './context/ThemeContext';
-import ChatOverlay from './components/ChatOverlay';
-import Layout from './components/Layout';
-import Landing from './pages/Landing';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Discover from './pages/Discover';
-import Feed from './pages/Feed';
-import Profile from './pages/Profile';
-import Chat from './pages/Chat';
-import Matches from './pages/Matches';
-import Messages from './pages/Messages';
-import Wallet from './pages/Wallet';
-import Pages from './pages/Pages';
-import PageDetails from './pages/PageDetails';
-import Groups from './pages/Groups';
-import GroupDetails from './pages/GroupDetails';
-import AdminDashboard from './pages/AdminDashboard';
-import Settings from './pages/Settings';
-import Reels from './pages/Reels';
-import Market from './pages/Market';
-
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  if (!user) return <Navigate to="/login" />;
-  return <>{children}</>;
-};
-
-const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAdmin, loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  if (!isAdmin) return <Navigate to="/" />;
-  return <>{children}</>;
-};
-
-const AppContent: React.FC = () => {
-  console.log('AppContent is rendering...');
-  const errorDisplay = document.getElementById('error-display');
-  if (errorDisplay) errorDisplay.innerText = 'AppContent is rendering...';
-  
-  try {
-    const { profile, loading } = useAuth();
-    console.log('Auth profile:', profile, 'loading:', loading);
-    if (errorDisplay) errorDisplay.innerText = `AppContent rendering (loading: ${loading})`;
-    
-    if (loading) {
-      return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-    }
-    return (
-      <ChatProvider currentUserId={profile?.uid}>
-        <Router>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            
-            <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-              <Route path="/discover" element={<Discover />} />
-              <Route path="/feed" element={<Feed />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/profile/:id" element={<Profile />} />
-              <Route path="/messages" element={<Messages />} />
-              <Route path="/wallet" element={<Wallet />} />
-              <Route path="/pages" element={<Pages />} />
-              <Route path="/pages/:id" element={<PageDetails />} />
-              <Route path="/groups" element={<Groups />} />
-              <Route path="/groups/:id" element={<GroupDetails />} />
-              <Route path="/chat" element={<Chat />} />
-              <Route path="/chat/:id" element={<Chat />} />
-              <Route path="/matches" element={<Matches />} />
-              <Route path="/reels" element={<Reels />} />
-              <Route path="/market" element={<Market />} />
-              <Route path="/settings" element={<Settings />} />
-            </Route>
-
-            <Route path="/admin" element={<AdminRoute><Layout admin /></AdminRoute>}>
-              <Route index element={<AdminDashboard />} />
-            </Route>
-          </Routes>
-          <ChatOverlay />
-        </Router>
-      </ChatProvider>
-    );
-  } catch (error) {
-    console.error('AppContent render error:', error);
-    if (errorDisplay) {
-      errorDisplay.innerText = 'AppContent Error: ' + (error instanceof Error ? error.message : String(error));
-    }
-    return <div>Error loading application. Check console.</div>;
-  }
-};
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </ThemeProvider>
+    <div className="min-h-screen bg-gradient-to-br from-pink-500 to-red-600 flex items-center justify-center text-white p-4">
+      <div className="text-center space-y-6 max-w-md w-full bg-white/10 backdrop-blur-md rounded-3xl p-12 shadow-2xl border border-white/20">
+        <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mx-auto shadow-inner">
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            viewBox="0 0 24 24" 
+            fill="currentColor" 
+            className="w-14 h-14 text-red-500"
+          >
+            <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
+          </svg>
+        </div>
+        <h1 className="text-4xl font-bold tracking-tight">Welcome to Heart Connect</h1>
+        <p className="text-lg text-white/80 font-medium">
+          Your journey to meaningful connections starts here.
+        </p>
+        <div className="pt-4">
+          <div className="h-1 w-20 bg-white/30 mx-auto rounded-full" />
+        </div>
+      </div>
+    </div>
   );
 }
 

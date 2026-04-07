@@ -8,24 +8,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <div id="debug-msg" style="position: fixed; top: 0; left: 0; background: red; color: white; padding: 10px; z-index: 9999; max-width: 100%; word-break: break-all;">
-      If you see this, index.html is loading. 
-      <div id="error-display" style="margin-top: 5px; font-family: monospace; font-size: 12px;">Waiting for JS...</div>
-    </div>
-    <script>
-      console.log('Debug script in index.html is running');
-      window.onerror = function(msg, url, line, col, error) {
-        console.error('Global Error:', msg, url, line, col, error);
-        const display = document.getElementById('error-display');
-        if (display) display.innerText = 'Error: ' + msg + '\nAt: ' + url + ':' + line;
-        return false;
-      };
-      window.onunhandledrejection = function(event) {
-        console.error('Unhandled Rejection:', event.reason);
-        const display = document.getElementById('error-display');
-        if (display) display.innerText = 'Unhandled Rejection: ' + event.reason;
-      };
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
