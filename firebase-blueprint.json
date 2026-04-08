@@ -24,6 +24,66 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "When the match was created" }
       },
       "required": ["id", "users", "createdAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "A post on the user's wall",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "text": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "mediaType": { "type": "string", "enum": ["image", "video"] },
+        "isReel": { "type": "boolean" },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "location": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "createdAt"]
+    },
+    "Reel": {
+      "title": "Reel",
+      "description": "A short vertical video",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "description": { "type": "string" },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "views": { "type": "number" },
+        "duration": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "videoUrl", "createdAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "A chat between users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "lastMessage": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "participants", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A single message in a conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "seen": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "senderId", "createdAt"]
     }
   },
   "firestore": {
@@ -34,6 +94,22 @@
     "/matches/{matchId}": {
       "schema": "Match",
       "description": "Match documents"
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Wall posts"
+    },
+    "/reels/{reelId}": {
+      "schema": "Reel",
+      "description": "Short videos"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Chat conversations"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages within a conversation"
     }
   }
 }

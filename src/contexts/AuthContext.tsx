@@ -80,6 +80,14 @@ interface UserProfile {
   displayName?: string;
   photoURL?: string;
   role: 'admin' | 'user';
+  bio?: string;
+  interests?: string[];
+  gender?: string;
+  lookingFor?: string;
+  age?: number;
+  location?: string;
+  isDatingActive?: boolean;
+  likedUsers?: string[];
 }
 
 interface AuthContextType {
@@ -89,6 +97,7 @@ interface AuthContextType {
   signup: (email: string, password: string, displayName: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => void;
+  updateProfile: (data: Partial<UserProfile>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -191,8 +200,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut(auth);
   };
 
+  const updateProfile = async (data: Partial<UserProfile>) => {
+    if (!auth.currentUser) throw new Error('No authenticated user');
+    const path = `users/${auth.currentUser.uid}`;
+    try {
+      await setDoc(doc(db, 'users', auth.currentUser.uid), data, { merge: true });
+      setUser(prev => prev ? { ...prev, ...data } : null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout, updateProfile }}>
       {!loading && children}
     </AuthContext.Provider>
   );
