@@ -267,6 +267,15 @@ const Navigation: React.FC = () => {
                     </div>
 
                     <Link 
+                      to="/profile?upgrade=true" 
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2 text-sm font-bold text-pink-500 hover:bg-pink-50 transition-colors"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Upgrade Account
+                    </Link>
+
+                    <Link 
                       to="/profile" 
                       onClick={() => setIsDropdownOpen(false)}
                       className="flex items-center gap-3 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-pink-500 transition-colors"

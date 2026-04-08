@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck } from 'lucide-react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDocs, or, and } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
 
 const COUNTRIES_CITIES: Record<string, string[]> = {
@@ -26,6 +26,8 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState<'photo' | 'cover' | null>(null);
   const [friendStatus, setFriendStatus] = useState<'none' | 'pending' | 'friends'>('none');
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [selectedTier, setSelectedTier] = useState<'bronze' | 'gold' | 'platinum'>('bronze');
   const profileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const hasInitialized = useRef(false);
@@ -35,6 +37,13 @@ export default function ProfilePage() {
   );
 
   const isOwnProfile = !userId || userId === user?.uid;
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('upgrade') === 'true' && isOwnProfile) {
+      setIsUpgradeModalOpen(true);
+    }
+  }, [location.search, isOwnProfile]);
 
   useEffect(() => {
     if (isOwnProfile) {
@@ -62,8 +71,10 @@ export default function ProfilePage() {
     // Check friend status
     const q = query(
       collection(db, 'friendRequests'),
-      where('fromId', 'in', [user.uid, userId]),
-      where('toId', 'in', [user.uid, userId])
+      or(
+        and(where('fromId', '==', user.uid), where('toId', '==', userId)),
+        and(where('fromId', '==', userId), where('toId', '==', user.uid))
+      )
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -297,6 +308,26 @@ export default function ProfilePage() {
     }
   };
 
+  const handleRequestUpgrade = async () => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'payments'), {
+        userId: user.uid,
+        userName: user.displayName || user.email,
+        amount: selectedTier === 'bronze' ? 9.99 : selectedTier === 'gold' ? 19.99 : 29.99,
+        type: 'upgrade',
+        tier: selectedTier,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+      setMessage({ type: 'success', text: 'Upgrade request sent! An admin will review it soon.' });
+      setIsUpgradeModalOpen(false);
+    } catch (error) {
+      console.error("Error requesting upgrade:", error);
+      setMessage({ type: 'error', text: 'Failed to send upgrade request.' });
+    }
+  };
+
   const getTierColor = (tier?: string) => {
     switch(tier) {
       case 'bronze': return 'bg-orange-500';
@@ -343,37 +374,7 @@ export default function ProfilePage() {
                   Cancel
                 </button>
               )
-            ) : (
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleMessage}
-                  className="bg-white text-slate-600 p-2 rounded-xl border border-slate-100 hover:bg-slate-50 transition-all shadow-sm"
-                >
-                  <MessageCircle className="w-5 h-5" />
-                </button>
-                <button 
-                  onClick={handleFollow}
-                  className="bg-white text-slate-600 px-4 py-2 rounded-xl border border-slate-100 font-bold hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2"
-                >
-                  {user?.following?.includes(userId!) ? <UserCheck className="w-4 h-4 text-green-500" /> : <UserPlus className="w-4 h-4" />}
-                  {user?.following?.includes(userId!) ? 'Following' : 'Follow'}
-                </button>
-                <button 
-                  onClick={handleAddFriend}
-                  disabled={friendStatus !== 'none'}
-                  className={`px-6 py-2 rounded-xl font-bold transition-all shadow-lg flex items-center gap-2 ${
-                    friendStatus === 'friends' 
-                      ? 'bg-green-500 text-white shadow-green-500/20' 
-                      : friendStatus === 'pending'
-                        ? 'bg-slate-100 text-slate-400 shadow-none cursor-not-allowed'
-                        : 'bg-pink-500 text-white shadow-pink-500/20 hover:bg-pink-600'
-                  }`}
-                >
-                  {friendStatus === 'friends' ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                  {friendStatus === 'friends' ? 'Friends' : friendStatus === 'pending' ? 'Request Sent' : 'Add Friend'}
-                </button>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -475,14 +476,66 @@ export default function ProfilePage() {
                       {isOwnProfile ? (formData.firstName || formData.lastName ? `${formData.firstName} ${formData.lastName}` : 'Set your name') : targetUser?.displayName}
                     </h2>
                     {targetUser?.proTier && targetUser.proTier !== 'none' && (
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white uppercase tracking-widest ${getTierColor(targetUser.proTier)}`}>
-                        {targetUser.proTier}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white uppercase tracking-widest ${getTierColor(targetUser.proTier)}`}>
+                          {targetUser.proTier}
+                        </span>
+                        {isOwnProfile && (
+                          <button 
+                            type="button"
+                            onClick={() => setIsUpgradeModalOpen(true)}
+                            className="text-[10px] font-black text-pink-500 uppercase tracking-widest hover:underline"
+                          >
+                            Upgrade
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {isOwnProfile && (!targetUser?.proTier || targetUser.proTier === 'none') && (
+                      <button 
+                        type="button"
+                        onClick={() => setIsUpgradeModalOpen(true)}
+                        className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+                      >
+                        Get Pro
+                      </button>
                     )}
                   </div>
                   <p className="text-slate-500 font-medium">{targetUser?.email}</p>
                   
-                  <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-6">
+                  {!isOwnProfile && (
+                    <div className="mt-6 flex flex-wrap justify-center md:justify-start gap-3">
+                      <button 
+                        onClick={handleMessage}
+                        className="bg-white text-slate-600 p-3 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-all shadow-sm"
+                      >
+                        <MessageCircle className="w-5 h-5" />
+                      </button>
+                      <button 
+                        onClick={handleFollow}
+                        className="bg-white text-slate-600 px-6 py-3 rounded-2xl border border-slate-100 font-bold hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2"
+                      >
+                        {user?.following?.includes(userId!) ? <UserCheck className="w-5 h-5 text-green-500" /> : <UserPlus className="w-5 h-5" />}
+                        {user?.following?.includes(userId!) ? 'Following' : 'Follow'}
+                      </button>
+                      <button 
+                        onClick={handleAddFriend}
+                        disabled={friendStatus !== 'none'}
+                        className={`px-8 py-3 rounded-2xl font-bold transition-all shadow-lg flex items-center gap-2 ${
+                          friendStatus === 'friends' 
+                            ? 'bg-green-500 text-white shadow-green-500/20' 
+                            : friendStatus === 'pending'
+                              ? 'bg-slate-100 text-slate-400 shadow-none cursor-not-allowed'
+                              : 'bg-pink-500 text-white shadow-pink-500/20 hover:bg-pink-600'
+                        }`}
+                      >
+                        {friendStatus === 'friends' ? <UserCheck className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                        {friendStatus === 'friends' ? 'Friends' : friendStatus === 'pending' ? 'Request Sent' : 'Add Friend'}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="mt-6 flex flex-wrap justify-center md:justify-start gap-6">
                     <div className="text-center md:text-left">
                       <p className="text-lg font-black text-slate-900">{targetUser?.followers?.length || 0}</p>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Followers</p>
@@ -514,6 +567,73 @@ export default function ProfilePage() {
               </div>
 
               {/* Form Fields */}
+              <AnimatePresence>
+                {isUpgradeModalOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6"
+                  >
+                    <motion.div 
+                      initial={{ scale: 0.9, y: 20 }}
+                      animate={{ scale: 1, y: 0 }}
+                      className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl"
+                    >
+                      <h3 className="text-2xl font-black text-slate-900 mb-2">Upgrade Your Account</h3>
+                      <p className="text-slate-500 font-medium mb-8">Choose a tier to unlock premium features and boost your profile.</p>
+                      
+                      <div className="space-y-4 mb-8">
+                        {[
+                          { id: 'bronze', name: 'Bronze', price: 9.99, color: 'bg-orange-500', features: ['Basic Badge', '5 Boosts/mo'] },
+                          { id: 'gold', name: 'Gold', price: 19.99, color: 'bg-yellow-500', features: ['Gold Badge', '15 Boosts/mo', 'Priority Support'] },
+                          { id: 'platinum', name: 'Platinum', price: 29.99, color: 'bg-slate-300', features: ['Platinum Badge', 'Unlimited Boosts', 'VIP Access'] }
+                        ].map((tier) => (
+                          <button
+                            key={tier.id}
+                            type="button"
+                            onClick={() => setSelectedTier(tier.id as any)}
+                            className={`w-full p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${
+                              selectedTier === tier.id ? 'border-pink-500 bg-pink-50/50' : 'border-slate-100 hover:border-slate-200'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className={`w-3 h-3 rounded-full ${tier.color}`} />
+                                <span className="font-black text-slate-900">{tier.name}</span>
+                              </div>
+                              <div className="flex gap-2">
+                                {tier.features.map((f, i) => (
+                                  <span key={i} className="text-[10px] font-bold text-slate-400 uppercase">{f}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <span className="text-lg font-black text-slate-900">${tier.price}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-4">
+                        <button 
+                          type="button"
+                          onClick={() => setIsUpgradeModalOpen(false)}
+                          className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={handleRequestUpgrade}
+                          className="flex-1 py-4 bg-pink-500 text-white rounded-2xl font-bold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20"
+                        >
+                          Request
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 ml-1">First Name</label>

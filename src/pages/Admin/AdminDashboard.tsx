@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { collection, query, getDocs, updateDoc, doc, onSnapshot, setDoc, orderBy, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
@@ -21,6 +22,7 @@ interface Payment {
   userId: string;
   amount: number;
   type: string;
+  tier?: string;
   status: string;
   method: string;
   proofUrl?: string;
@@ -29,6 +31,7 @@ interface Payment {
 }
 
 const AdminDashboard: React.FC = () => {
+  const { user } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,6 +46,8 @@ const AdminDashboard: React.FC = () => {
   });
 
   useEffect(() => {
+    if (user?.role !== 'admin') return;
+
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const usersData = snapshot.docs.map(doc => ({
@@ -73,7 +78,7 @@ const AdminDashboard: React.FC = () => {
       unsubscribe();
       unsubscribePayments();
     };
-  }, []);
+  }, [user]);
 
   const handleUpdateUser = async (uid: string, data: Partial<UserProfile>) => {
     try {
@@ -93,13 +98,18 @@ const AdminDashboard: React.FC = () => {
         const userSnap = await getDoc(userRef);
         const currentBalance = userSnap.data()?.walletBalance || 0;
         await updateDoc(userRef, { walletBalance: currentBalance + payment.amount });
+      } else if (payment.type === 'upgrade') {
+        const userRef = doc(db, 'users', payment.userId);
+        await updateDoc(userRef, { proTier: payment.tier });
       }
 
       // Add notification
       await addDoc(collection(db, 'notifications'), {
         userId: payment.userId,
         type: 'payment_approved',
-        text: `Your payment of ${payment.amount} has been approved.`,
+        text: payment.type === 'upgrade' 
+          ? `Your upgrade to ${payment.tier} has been approved!` 
+          : `Your payment of ${payment.amount} has been approved.`,
         read: false,
         createdAt: serverTimestamp()
       });

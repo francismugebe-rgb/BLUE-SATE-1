@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles, Camera, Zap, TrendingUp, Clock, DollarSign, X } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles, Camera, Zap, TrendingUp, Clock, DollarSign, X, UserCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import LoadingScreen from '../../components/LoadingScreen';
 import imageCompression from 'browser-image-compression';
@@ -341,11 +341,17 @@ const FeedPage: React.FC = () => {
                         )}
                       </div>
                       <div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
                           <Link to={`/profile/${post.userId}`} className="hover:text-pink-500 transition-colors">
                             <h3 className="font-black text-slate-900 leading-none">{post.displayName}</h3>
                           </Link>
                           {post.isVerified && <Sparkles className="w-3 h-3 text-blue-500 fill-blue-500" />}
+                          {user?.friends?.includes(post.userId) && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-600 rounded-full text-[10px] font-black uppercase tracking-wider">
+                              <UserCheck className="w-3 h-3" />
+                              Friends
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">
                           {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleString() : 'Just now'}
