@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles, Camera } from 'lucide-react';
 import LoadingScreen from '../../components/LoadingScreen';
+import imageCompression from 'browser-image-compression';
 
 interface Post {
   id: string;
@@ -35,6 +36,7 @@ const FeedPage: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPostText, setNewPostText] = useState('');
   const [newPostMedia, setNewPostMedia] = useState('');
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeComments, setActiveComments] = useState<string | null>(null);
@@ -83,6 +85,7 @@ const FeedPage: React.FC = () => {
       
       setNewPostText('');
       setNewPostMedia('');
+      setMediaPreview(null);
       setMediaType(null);
     } catch (error) {
       console.error("Error creating post:", error);
@@ -108,15 +111,51 @@ const FeedPage: React.FC = () => {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
     const file = e.target.files?.[0];
-    if (file) {
-      // In a real app, upload to storage. For now, simulate with a random picsum/video url
-      const simulatedUrl = type === 'image' 
-        ? `https://picsum.photos/seed/${Math.random()}/800/600`
-        : 'https://www.w3schools.com/html/mov_bbb.mp4';
-      setNewPostMedia(simulatedUrl);
+    if (!file) return;
+
+    setIsSubmitting(true);
+    
+    // Local preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setMediaPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    try {
+      let fileToUpload = file;
+      
+      // Compress images if > 2MB
+      if (type === 'image' && file.size > 2 * 1024 * 1024) {
+        const options = {
+          maxSizeMB: 1.5,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true
+        };
+        fileToUpload = await imageCompression(file, options);
+      }
+
+      const formData = new FormData();
+      formData.append('file', fileToUpload);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const { url } = await response.json();
+      setNewPostMedia(url);
       setMediaType(type);
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("Failed to upload media. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -188,15 +227,15 @@ const FeedPage: React.FC = () => {
                 <Send className="w-4 h-4" />
               </button>
             </div>
-            {newPostMedia && (
+            { (mediaPreview || newPostMedia) && (
               <div className="relative rounded-2xl overflow-hidden aspect-video group">
                 {mediaType === 'image' ? (
-                  <img src={newPostMedia} alt="Preview" className="w-full h-full object-cover" />
+                  <img src={mediaPreview || newPostMedia} alt="Preview" className="w-full h-full object-cover" />
                 ) : (
-                  <video src={newPostMedia} className="w-full h-full object-cover" />
+                  <video src={mediaPreview || newPostMedia} className="w-full h-full object-cover" />
                 )}
                 <button 
-                  onClick={() => {setNewPostMedia(''); setMediaType(null);}}
+                  onClick={() => {setNewPostMedia(''); setMediaPreview(null); setMediaType(null);}}
                   className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
                 >
                   ×

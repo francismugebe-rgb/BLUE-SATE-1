@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { motion } from 'framer-motion';
-import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap } from 'lucide-react';
+import { motion } from 'motion/react';
+import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import imageCompression from 'browser-image-compression';
 
 const COUNTRIES_CITIES: Record<string, string[]> = {
   'Zimbabwe': ['Harare', 'Bulawayo', 'Chitungwiza', 'Mutare', 'Epworth', 'Gweru', 'Kwekwe', 'Kadoma', 'Masvingo', 'Chinhoyi'],
@@ -12,10 +13,15 @@ const COUNTRIES_CITIES: Record<string, string[]> = {
   'Ghana': ['Accra', 'Kumasi', 'Tamale', 'Takoradi', 'Atsiaman', 'Tema', 'Teshi', 'Cape Coast', 'Sekondi', 'Obuasi']
 };
 
-const ProfilePage: React.FC = () => {
+export default function ProfilePage() {
   const { user, updateProfile } = useAuth();
   const location = useLocation();
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState<'photo' | 'cover' | null>(null);
+  const profileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const hasInitialized = useRef(false);
+  const [previews, setPreviews] = useState<{ photo?: string, cover?: string }>({});
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning', text: string } | null>(
     location.state?.incomplete ? { type: 'warning', text: 'Please fill in your Name and Surname to continue using the app.' } : null
   );
@@ -35,7 +41,7 @@ const ProfilePage: React.FC = () => {
   });
 
   useEffect(() => {
-    if (user) {
+    if (user && !hasInitialized.current) {
       setFormData({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
@@ -49,6 +55,7 @@ const ProfilePage: React.FC = () => {
         isDatingActive: user.isDatingActive || false,
         phoneNumber: user.phoneNumber || ''
       });
+      hasInitialized.current = true;
     }
   }, [user]);
 
@@ -88,6 +95,70 @@ const ProfilePage: React.FC = () => {
       setMessage({ type: 'error', text: error.message || 'Failed to update profile' });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'photo' | 'cover') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(type);
+    setMessage(null);
+
+    // Create local preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreviews(prev => ({ ...prev, [type]: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+
+    try {
+      // 1. Compression if > 2MB (or always for optimization)
+      let fileToUpload = file;
+      if (file.size > 2 * 1024 * 1024) {
+        const options = {
+          maxSizeMB: 1.5, // Target less than 2MB
+          maxWidthOrHeight: 1920,
+          useWebWorker: true
+        };
+        fileToUpload = await imageCompression(file, options);
+      }
+
+      // 2. Upload to server
+      const formData = new FormData();
+      formData.append('file', fileToUpload);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const { url } = await response.json();
+
+      // 3. Update profile
+      await updateProfile({
+        [type === 'photo' ? 'photoURL' : 'coverURL']: url
+      });
+
+      setMessage({ type: 'success', text: `${type === 'photo' ? 'Profile' : 'Cover'} photo updated!` });
+      setPreviews(prev => {
+        const next = { ...prev };
+        delete next[type];
+        return next;
+      });
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      setMessage({ type: 'error', text: error.message || 'Failed to upload photo' });
+      setPreviews(prev => {
+        const next = { ...prev };
+        delete next[type];
+        return next;
+      });
+    } finally {
+      setIsUploading(null);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -134,23 +205,78 @@ const ProfilePage: React.FC = () => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-8">
-              {/* Profile Header */}
-              <div className="flex flex-col md:flex-row items-center gap-8 pb-8 border-b border-slate-100">
-                <div className="relative group">
-                  <div className="w-32 h-32 bg-pink-50 rounded-[2rem] flex items-center justify-center overflow-hidden border-4 border-white shadow-lg">
-                    {user?.photoURL ? (
-                      <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <User className="w-12 h-12 text-pink-300" />
-                    )}
+              {/* Cover Photo Section */}
+              <div className="relative h-48 md:h-64 bg-slate-100 rounded-[2rem] overflow-hidden group">
+                {(previews.cover || user?.coverURL) ? (
+                  <img src={previews.cover || user?.coverURL} alt="Cover" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-300">
+                    <ImageIcon className="w-12 h-12" />
                   </div>
+                )}
+                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    disabled={!!isUploading}
+                    className="bg-white/90 hover:bg-white text-slate-900 px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition-all"
+                  >
+                    {isUploading === 'cover' ? (
+                      <div className="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Camera className="w-4 h-4" />
+                    )}
+                    Change Cover
+                  </button>
+                </div>
+                <input 
+                  type="file" 
+                  ref={coverInputRef} 
+                  className="hidden" 
+                  accept="image/*"
+                  onChange={(e) => handlePhotoUpload(e, 'cover')}
+                />
+              </div>
+
+              {/* Profile Header */}
+              <div className="flex flex-col md:flex-row items-center gap-8 pb-8 border-b border-slate-100 -mt-20 relative z-10 px-8">
+                <div className="relative group">
+                  <div className="w-40 h-40 bg-pink-50 rounded-[2.5rem] flex items-center justify-center overflow-hidden border-8 border-white shadow-xl relative">
+                    {(previews.photo || user?.photoURL) ? (
+                      <img src={previews.photo || user?.photoURL} alt={user?.displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <User className="w-16 h-16 text-pink-300" />
+                    )}
+                    
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => profileInputRef.current?.click()}
+                        disabled={!!isUploading}
+                        className="text-white p-3 rounded-full hover:bg-white/20 transition-all"
+                      >
+                        {isUploading === 'photo' ? (
+                          <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Camera className="w-6 h-6" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <input 
+                    type="file" 
+                    ref={profileInputRef} 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={(e) => handlePhotoUpload(e, 'photo')}
+                  />
                   {user?.isVerified && (
-                    <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-blue-500 rounded-xl shadow-md border border-white flex items-center justify-center text-white">
+                    <div className="absolute bottom-2 right-2 w-10 h-10 bg-blue-500 rounded-xl shadow-md border-4 border-white flex items-center justify-center text-white">
                       <Sparkles className="w-5 h-5 fill-white" />
                     </div>
                   )}
                 </div>
-                <div className="flex-1 text-center md:text-left">
+                <div className="flex-1 text-center md:text-left pt-16 md:pt-0">
                   <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
                     <h2 className="text-2xl font-black text-slate-900">
                       {formData.firstName || formData.lastName ? `${formData.firstName} ${formData.lastName}` : 'Set your name'}
@@ -366,6 +492,5 @@ const ProfilePage: React.FC = () => {
       </div>
     </div>
   );
-};
+}
 
-export default ProfilePage;

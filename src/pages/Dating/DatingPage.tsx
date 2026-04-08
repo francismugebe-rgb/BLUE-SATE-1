@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
 import { Heart, X, MapPin, Info, Sparkles, MessageCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import LoadingScreen from '../../components/LoadingScreen';

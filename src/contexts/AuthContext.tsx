@@ -82,6 +82,7 @@ interface UserProfile {
   firstName?: string;
   lastName?: string;
   photoURL?: string;
+  coverURL?: string;
   role: 'admin' | 'user';
   bio?: string;
   interests?: string[];

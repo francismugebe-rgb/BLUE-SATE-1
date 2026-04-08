@@ -1,7 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Heart, Sparkles, ArrowRight, Shield, Zap, Users, LogOut, MessageCircle, User, Play, MapPin } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 
 // Lazy load pages
 const LoginPage = lazy(() => import('./pages/Auth/LoginPage'));

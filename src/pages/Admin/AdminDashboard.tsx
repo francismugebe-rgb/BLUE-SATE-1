@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, query, getDocs, updateDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Users, Shield, Sparkles, Settings, Save, Search, CheckCircle, XCircle } from 'lucide-react';
 
 interface UserProfile {

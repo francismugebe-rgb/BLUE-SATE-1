@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart, Mail, Lock, ArrowRight, User, Github } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const SignUpPage: React.FC = () => {

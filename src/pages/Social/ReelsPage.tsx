@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Heart, MessageCircle, Share2, Music2, UserPlus, MoreVertical, Play } from 'lucide-react';
 import LoadingScreen from '../../components/LoadingScreen';
 
@@ -24,6 +24,7 @@ const ReelsPage: React.FC = () => {
   const [reels, setReels] = useState<Reel[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -51,15 +52,32 @@ const ReelsPage: React.FC = () => {
     if (!file || !user) return;
 
     setIsUploading(true);
+    
+    // Create local preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setUploadPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
     try {
-      // Simulate upload
-      const simulatedVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const { url } = await response.json();
       
       await addDoc(collection(db, 'reels'), {
         userId: user.uid,
         displayName: user.displayName,
         photoURL: user.photoURL || '',
-        videoUrl: simulatedVideoUrl,
+        videoUrl: url,
         description: "Check out my new reel! #HeartConnect",
         likes: [],
         views: 0,
@@ -68,10 +86,14 @@ const ReelsPage: React.FC = () => {
 
       await awardPoints(20); // Award points for uploading a reel
       alert("Reel uploaded successfully!");
+      setUploadPreview(null);
     } catch (error) {
       console.error("Error uploading reel:", error);
+      alert("Failed to upload reel. Please try again.");
+      setUploadPreview(null);
     } finally {
       setIsUploading(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -169,7 +191,12 @@ const ReelsPage: React.FC = () => {
 
       {isUploading && (
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="text-center">
+          <div className="text-center max-w-xs w-full px-6">
+            {uploadPreview && (
+              <div className="aspect-[9/16] w-full bg-slate-900 rounded-2xl overflow-hidden mb-6 shadow-2xl border border-white/10">
+                <video src={uploadPreview} className="w-full h-full object-cover" autoPlay muted loop />
+              </div>
+            )}
             <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-white font-bold">Uploading Reel...</p>
           </div>
