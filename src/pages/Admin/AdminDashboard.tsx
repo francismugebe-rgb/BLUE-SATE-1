@@ -1,170 +1,224 @@
-import React from 'react';
-import { Users, Shield, Settings, BarChart3, Heart, MessageSquare, Wallet, LogOut, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { db } from '../../lib/firebase';
+import { collection, query, getDocs, updateDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { Users, Shield, Sparkles, Settings, Save, Search, CheckCircle, XCircle } from 'lucide-react';
+
+interface UserProfile {
+  uid: string;
+  displayName: string;
+  email: string;
+  role: string;
+  isVerified: boolean;
+  proTier: string;
+  points: number;
+}
 
 const AdminDashboard: React.FC = () => {
-  const { logout } = useAuth();
-  const [stats, setStats] = React.useState([
-    { label: 'Total Users', value: '0', icon: Users, color: 'bg-blue-500' },
-    { label: 'Active Matches', value: '0', icon: Heart, color: 'bg-pink-500' },
-    { label: 'Messages Sent', value: '0', icon: MessageSquare, color: 'bg-purple-500' },
-    { label: 'Wallet Volume', value: '$0', icon: Wallet, color: 'bg-green-500' },
-  ]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'users' | 'settings'>('users');
+  const [settings, setSettings] = useState({
+    pointValuePost: 10,
+    pointValueLike: 2,
+    pointValueComment: 5,
+    priceBronze: 9.99,
+    priceGold: 19.99,
+    pricePlatinum: 29.99
+  });
 
-  const [recentUsers, setRecentUsers] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  useEffect(() => {
+    const q = query(collection(db, 'users'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const usersData = snapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data()
+      })) as UserProfile[];
+      setUsers(usersData);
+    });
 
-  React.useEffect(() => {
-    // In a real app, we would listen to collections here
-    // For now, we'll just show empty state as requested "Remove all fake data"
-    setLoading(false);
+    const fetchSettings = async () => {
+      const settingsDoc = await getDocs(query(collection(db, 'settings')));
+      if (!settingsDoc.empty) {
+        setSettings(settingsDoc.docs[0].data() as any);
+      }
+    };
+    fetchSettings();
+
+    return () => unsubscribe();
   }, []);
 
+  const handleUpdateUser = async (uid: string, data: Partial<UserProfile>) => {
+    try {
+      await updateDoc(doc(db, 'users', uid), data);
+    } catch (error) {
+      console.error("Error updating user:", error);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      await setDoc(doc(db, 'settings', 'global'), settings);
+      alert("Settings saved successfully!");
+    } catch (error) {
+      console.error("Error saving settings:", error);
+    }
+  };
+
+  const filteredUsers = users.filter(u => 
+    u.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-10">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
-          <div>
-            <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3">
-              <Shield className="w-8 h-8 text-pink-500" />
-              Super Admin Dashboard
-            </h1>
-            <p className="text-slate-500 font-medium mt-1">Welcome back, Master Administrator.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Site
-            </Link>
+    <div className="min-h-screen bg-slate-50 pt-24 pb-12 px-4">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-4xl font-black text-slate-900">Admin Dashboard</h1>
+          <div className="flex gap-2 bg-white p-1 rounded-2xl shadow-sm border border-slate-100">
             <button 
-              onClick={logout}
-              className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold text-sm hover:bg-red-100 transition-all"
+              onClick={() => setActiveTab('users')}
+              className={`px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${activeTab === 'users' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
             >
-              <LogOut className="w-4 h-4" />
-              Logout
+              <Users className="w-4 h-4" />
+              Users
+            </button>
+            <button 
+              onClick={() => setActiveTab('settings')}
+              className={`px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <Settings className="w-4 h-4" />
+              Settings
             </button>
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          {stats.map((stat, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm"
-            >
-              <div className={`w-12 h-12 ${stat.color} rounded-2xl flex items-center justify-center mb-4`}>
-                <stat.icon className="w-6 h-6 text-white" />
-              </div>
-              <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">{stat.label}</p>
-              <h3 className="text-2xl font-black text-slate-900">{stat.value}</h3>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Main Content Area */}
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Recent Users Table */}
-          <div className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-8 border-b border-slate-50 flex items-center justify-between">
-              <h2 className="text-xl font-bold">Recent Registrations</h2>
-              <button className="text-pink-500 font-bold text-sm hover:underline">View All</button>
+        {activeTab === 'users' ? (
+          <div className="space-y-6">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <input 
+                type="text"
+                placeholder="Search users by name or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-6 py-4 bg-white border border-slate-100 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500/20 font-medium"
+              />
             </div>
-            <div className="overflow-x-auto">
+
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-slate-50/50 text-slate-400 text-xs font-bold uppercase tracking-widest">
-                    <th className="px-8 py-4">User</th>
-                    <th className="px-8 py-4">Status</th>
-                    <th className="px-8 py-4">Joined</th>
-                    <th className="px-8 py-4">Action</th>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">User</th>
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Verification</th>
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Pro Tier</th>
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Points</th>
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {recentUsers.length > 0 ? (
-                    recentUsers.map((user, i) => (
-                      <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-8 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-slate-100 rounded-full overflow-hidden">
-                              <img src={`https://picsum.photos/seed/${user.name}/100/100`} alt="" referrerPolicy="no-referrer" />
-                            </div>
-                            <div>
-                              <p className="font-bold text-slate-900">{user.name}</p>
-                              <p className="text-xs text-slate-500">{user.email}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-8 py-4">
-                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                            user.status === 'Verified' ? 'bg-green-100 text-green-600' :
-                            user.status === 'Pending' ? 'bg-amber-100 text-amber-600' :
-                            'bg-red-100 text-red-600'
-                          }`}>
-                            {user.status}
-                          </span>
-                        </td>
-                        <td className="px-8 py-4 text-sm text-slate-500 font-medium">{user.date}</td>
-                        <td className="px-8 py-4">
-                          <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                            <Settings className="w-4 h-4 text-slate-400" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="px-8 py-12 text-center text-slate-400 font-medium">
-                        No recent registrations found.
+                  {filteredUsers.map((u) => (
+                    <tr key={u.uid} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-8 py-6">
+                        <div className="font-black text-slate-900">{u.displayName}</div>
+                        <div className="text-sm text-slate-500 font-medium">{u.email}</div>
+                      </td>
+                      <td className="px-8 py-6">
+                        <button 
+                          onClick={() => handleUpdateUser(u.uid, { isVerified: !u.isVerified })}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${u.isVerified ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-400'}`}
+                        >
+                          {u.isVerified ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                          {u.isVerified ? 'Verified' : 'Unverified'}
+                        </button>
+                      </td>
+                      <td className="px-8 py-6">
+                        <select 
+                          value={u.proTier || 'none'}
+                          onChange={(e) => handleUpdateUser(u.uid, { proTier: e.target.value })}
+                          className="bg-slate-100 border-none rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none"
+                        >
+                          <option value="none">None</option>
+                          <option value="bronze">Bronze</option>
+                          <option value="gold">Gold</option>
+                          <option value="platinum">Platinum</option>
+                        </select>
+                      </td>
+                      <td className="px-8 py-6">
+                        <div className="flex items-center gap-2 font-black text-slate-900">
+                          <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                          {u.points || 0}
+                        </div>
+                      </td>
+                      <td className="px-8 py-6">
+                        <button className="text-pink-500 font-bold text-sm hover:underline">Edit Profile</button>
                       </td>
                     </tr>
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
-
-          {/* System Health / Logs */}
-          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-pink-500" />
-              System Health
-            </h2>
-            <div className="space-y-6">
-              {[
-                { label: 'Server Load', value: '24%', status: 'Normal' },
-                { label: 'Database Latency', value: '12ms', status: 'Optimal' },
-                { label: 'API Response Time', value: '180ms', status: 'Normal' },
-              ].map((item, i) => (
-                <div key={i}>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-bold text-slate-700">{item.label}</span>
-                    <span className="text-xs font-black text-green-500 uppercase">{item.status}</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-pink-500 rounded-full" 
-                      style={{ width: item.value }}
+        ) : (
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+              <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-yellow-500" />
+                Point Values
+              </h2>
+              <div className="space-y-6">
+                {[
+                  { label: 'Points per Post', key: 'pointValuePost' },
+                  { label: 'Points per Like', key: 'pointValueLike' },
+                  { label: 'Points per Comment', key: 'pointValueComment' },
+                ].map((item) => (
+                  <div key={item.key} className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">{item.label}</label>
+                    <input 
+                      type="number"
+                      value={(settings as any)[item.key]}
+                      onChange={(e) => setSettings({...settings, [item.key]: Number(e.target.value)})}
+                      className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 font-medium"
                     />
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 font-bold">{item.value} usage</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-10">
-              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4">Recent Logs</h3>
-              <div className="space-y-3">
-                <div className="text-xs text-slate-400 font-medium italic">No recent system logs.</div>
+                ))}
               </div>
             </div>
+
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+              <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                <Shield className="w-6 h-6 text-pink-500" />
+                Pro Tier Pricing ($)
+              </h2>
+              <div className="space-y-6">
+                {[
+                  { label: 'Bronze Price', key: 'priceBronze' },
+                  { label: 'Gold Price', key: 'priceGold' },
+                  { label: 'Platinum Price', key: 'pricePlatinum' },
+                ].map((item) => (
+                  <div key={item.key} className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">{item.label}</label>
+                    <input 
+                      type="number"
+                      step="0.01"
+                      value={(settings as any)[item.key]}
+                      onChange={(e) => setSettings({...settings, [item.key]: Number(e.target.value)})}
+                      className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 font-medium"
+                    />
+                  </div>
+                ))}
+              </div>
+              <button 
+                onClick={handleSaveSettings}
+                className="w-full mt-8 bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-900/20"
+              >
+                <Save className="w-5 h-5" />
+                Save All Settings
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

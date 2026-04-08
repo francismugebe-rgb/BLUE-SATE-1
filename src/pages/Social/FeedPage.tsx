@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles } from 'lucide-react';
 
 interface Post {
   id: string;
@@ -12,30 +12,49 @@ interface Post {
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
   likes: string[];
+  likeCount: number;
   location?: string;
   createdAt: any;
   displayName?: string;
   photoURL?: string;
+  isVerified?: boolean;
+}
+
+interface Comment {
+  id: string;
+  userId: string;
+  displayName: string;
+  photoURL: string;
+  text: string;
+  createdAt: any;
 }
 
 const FeedPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, awardPoints } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPostText, setNewPostText] = useState('');
   const [newPostMedia, setNewPostMedia] = useState('');
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeComments, setActiveComments] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'recent' | 'popular'>('recent');
 
   useEffect(() => {
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+    const q = query(
+      collection(db, 'posts'), 
+      orderBy(sortBy === 'recent' ? 'createdAt' : 'likeCount', 'desc')
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const postsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Post[];
+      const postsData = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter((post: any) => (post.text?.trim() || post.mediaUrl) && post.displayName) as Post[];
       setPosts(postsData);
     });
     return () => unsubscribe();
-  }, []);
+  }, [sortBy]);
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,15 +65,22 @@ const FeedPage: React.FC = () => {
       await addDoc(collection(db, 'posts'), {
         userId: user.uid,
         displayName: user.displayName,
-        photoURL: user.photoURL,
+        photoURL: user.photoURL || '',
+        isVerified: user.isVerified || false,
         text: newPostText,
         mediaUrl: newPostMedia,
-        mediaType: newPostMedia ? 'image' : null,
+        mediaType: mediaType,
         likes: [],
+        likeCount: 0,
         createdAt: serverTimestamp()
       });
+      
+      // Award points for posting
+      await awardPoints(10);
+      
       setNewPostText('');
       setNewPostMedia('');
+      setMediaType(null);
     } catch (error) {
       console.error("Error creating post:", error);
     } finally {
@@ -67,16 +93,49 @@ const FeedPage: React.FC = () => {
     const postRef = doc(db, 'posts', postId);
     try {
       await updateDoc(postRef, {
-        likes: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
+        likes: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+        likeCount: isLiked ? posts.find(p => p.id === postId)!.likeCount - 1 : posts.find(p => p.id === postId)!.likeCount + 1
       });
+      
+      if (!isLiked) {
+        await awardPoints(2); // Award points for liking
+      }
     } catch (error) {
       console.error("Error liking post:", error);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // In a real app, upload to storage. For now, simulate with a random picsum/video url
+      const simulatedUrl = type === 'image' 
+        ? `https://picsum.photos/seed/${Math.random()}/800/600`
+        : 'https://www.w3schools.com/html/mov_bbb.mp4';
+      setNewPostMedia(simulatedUrl);
+      setMediaType(type);
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 pt-24 pb-12 px-4">
       <div className="max-w-2xl mx-auto space-y-8">
+        {/* Sort Toggle */}
+        <div className="flex justify-center gap-4">
+          <button 
+            onClick={() => setSortBy('recent')}
+            className={`px-6 py-2 rounded-full font-bold transition-all ${sortBy === 'recent' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 border border-slate-100'}`}
+          >
+            Recent
+          </button>
+          <button 
+            onClick={() => setSortBy('popular')}
+            className={`px-6 py-2 rounded-full font-bold transition-all ${sortBy === 'popular' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 border border-slate-100'}`}
+          >
+            Popular
+          </button>
+        </div>
+
         {/* Create Post */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -104,21 +163,16 @@ const FeedPage: React.FC = () => {
             
             <div className="flex items-center justify-between pt-4 border-t border-slate-50">
               <div className="flex gap-2">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    const url = prompt("Enter image URL:");
-                    if (url) setNewPostMedia(url);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 hover:bg-slate-50 rounded-xl text-slate-600 font-bold transition-colors"
-                >
+                <label className="flex items-center gap-2 px-4 py-2 hover:bg-slate-50 rounded-xl text-slate-600 font-bold transition-colors cursor-pointer">
                   <ImageIcon className="w-5 h-5 text-green-500" />
                   Photo
-                </button>
-                <button type="button" className="flex items-center gap-2 px-4 py-2 hover:bg-slate-50 rounded-xl text-slate-600 font-bold transition-colors">
-                  <MapPin className="w-5 h-5 text-red-500" />
-                  Location
-                </button>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'image')} />
+                </label>
+                <label className="flex items-center gap-2 px-4 py-2 hover:bg-slate-50 rounded-xl text-slate-600 font-bold transition-colors cursor-pointer">
+                  <Share2 className="w-5 h-5 text-purple-500" />
+                  Video
+                  <input type="file" accept="video/*" className="hidden" onChange={(e) => handleFileUpload(e, 'video')} />
+                </label>
               </div>
               <button 
                 type="submit"
@@ -131,9 +185,13 @@ const FeedPage: React.FC = () => {
             </div>
             {newPostMedia && (
               <div className="relative rounded-2xl overflow-hidden aspect-video group">
-                <img src={newPostMedia} alt="Preview" className="w-full h-full object-cover" />
+                {mediaType === 'image' ? (
+                  <img src={newPostMedia} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <video src={newPostMedia} className="w-full h-full object-cover" />
+                )}
                 <button 
-                  onClick={() => setNewPostMedia('')}
+                  onClick={() => {setNewPostMedia(''); setMediaType(null);}}
                   className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
                 >
                   ×
@@ -169,9 +227,12 @@ const FeedPage: React.FC = () => {
                         )}
                       </div>
                       <div>
-                        <h3 className="font-black text-slate-900 leading-none">{post.displayName}</h3>
+                        <div className="flex items-center gap-1">
+                          <h3 className="font-black text-slate-900 leading-none">{post.displayName}</h3>
+                          {post.isVerified && <Sparkles className="w-3 h-3 text-blue-500 fill-blue-500" />}
+                        </div>
                         <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">
-                          {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString() : 'Just now'}
+                          {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleString() : 'Just now'}
                         </p>
                       </div>
                     </div>
@@ -189,12 +250,20 @@ const FeedPage: React.FC = () => {
 
                   {post.mediaUrl && (
                     <div className="aspect-square md:aspect-video bg-slate-100">
-                      <img 
-                        src={post.mediaUrl} 
-                        alt="" 
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
+                      {post.mediaType === 'video' ? (
+                        <video 
+                          src={post.mediaUrl} 
+                          controls 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <img 
+                          src={post.mediaUrl} 
+                          alt="" 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      )}
                     </div>
                   )}
 
@@ -208,9 +277,14 @@ const FeedPage: React.FC = () => {
                         }`}
                       >
                         <Heart className={`w-5 h-5 ${isLiked ? 'fill-pink-500' : ''}`} />
-                        {post.likes.length > 0 && post.likes.length}
+                        {post.likeCount || 0}
                       </button>
-                      <button className="flex items-center gap-2 px-4 py-2 hover:bg-slate-50 rounded-xl text-slate-600 font-bold transition-colors">
+                      <button 
+                        onClick={() => setActiveComments(activeComments === post.id ? null : post.id)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all ${
+                          activeComments === post.id ? 'bg-blue-50 text-blue-500' : 'hover:bg-slate-50 text-slate-600'
+                        }`}
+                      >
                         <MessageCircle className="w-5 h-5" />
                         Comment
                       </button>
@@ -220,12 +294,94 @@ const FeedPage: React.FC = () => {
                       Share
                     </button>
                   </div>
+
+                  {/* Comment Section */}
+                  {activeComments === post.id && (
+                    <CommentSection postId={post.id} />
+                  )}
                 </motion.div>
               );
             })}
           </AnimatePresence>
         </div>
       </div>
+    </div>
+  );
+};
+
+const CommentSection: React.FC<{ postId: string }> = ({ postId }) => {
+  const { user, awardPoints } = useAuth();
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState('');
+
+  useEffect(() => {
+    const q = query(collection(db, `posts/${postId}/comments`), orderBy('createdAt', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const commentsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Comment[];
+      setComments(commentsData);
+    });
+    return () => unsubscribe();
+  }, [postId]);
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !newComment.trim()) return;
+
+    try {
+      await addDoc(collection(db, `posts/${postId}/comments`), {
+        userId: user.uid,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        text: newComment,
+        createdAt: serverTimestamp()
+      });
+      
+      await awardPoints(5); // Award points for commenting
+      setNewComment('');
+    } catch (error) {
+      console.error("Error adding comment:", error);
+    }
+  };
+
+  return (
+    <div className="p-6 bg-slate-50 border-t border-slate-100">
+      <div className="space-y-4 mb-6">
+        {comments.map((comment) => (
+          <div key={comment.id} className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden flex-shrink-0">
+              <img src={comment.photoURL} alt="" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex-1 bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs font-black text-slate-900">{comment.displayName}</span>
+                <span className="text-[10px] font-bold text-slate-400">
+                  {comment.createdAt?.toDate ? comment.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
+                </span>
+              </div>
+              <p className="text-sm text-slate-600 font-medium">{comment.text}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <form onSubmit={handleAddComment} className="flex gap-2">
+        <input 
+          type="text" 
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          placeholder="Write a comment..."
+          className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-pink-500/20 outline-none"
+        />
+        <button 
+          type="submit"
+          disabled={!newComment.trim()}
+          className="bg-pink-500 text-white p-2 rounded-xl hover:bg-pink-600 disabled:bg-pink-300 transition-all"
+        >
+          <Send className="w-4 h-4" />
+        </button>
+      </form>
     </div>
   );
 };

@@ -78,6 +78,8 @@ interface UserProfile {
   uid: string;
   email: string;
   displayName?: string;
+  firstName?: string;
+  lastName?: string;
   photoURL?: string;
   role: 'admin' | 'user';
   bio?: string;
@@ -88,16 +90,21 @@ interface UserProfile {
   location?: string;
   isDatingActive?: boolean;
   likedUsers?: string[];
+  points?: number;
+  isVerified?: boolean;
+  proTier?: 'none' | 'bronze' | 'gold' | 'platinum';
+  phoneNumber?: string;
 }
 
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, displayName: string) => Promise<void>;
+  signup: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
+  awardPoints: (amount: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -161,14 +168,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (email: string, password: string, displayName: string) => {
+  const signup = async (email: string, password: string, firstName: string, lastName: string) => {
     try {
       const { user: firebaseUser } = await createUserWithEmailAndPassword(auth, email, password);
       const role = email === 'FRANCISMUGEBE@gmail.com' ? 'admin' : 'user';
       const newProfile: UserProfile = {
         uid: firebaseUser.uid,
         email: email,
-        displayName: displayName,
+        firstName: firstName,
+        lastName: lastName,
+        displayName: `${firstName} ${lastName}`,
         role: role
       };
       const path = `users/${firebaseUser.uid}`;
@@ -211,8 +220,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const awardPoints = async (amount: number) => {
+    if (!auth.currentUser || !user) return;
+    const newPoints = (user.points || 0) + amount;
+    await updateProfile({ points: newPoints });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout, updateProfile, awardPoints }}>
       {!loading && children}
     </AuthContext.Provider>
   );

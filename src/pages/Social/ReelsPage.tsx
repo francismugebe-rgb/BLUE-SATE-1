@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Music2, UserPlus, MoreVertical } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music2, UserPlus, MoreVertical, Play } from 'lucide-react';
 
 interface Reel {
   id: string;
@@ -19,9 +19,10 @@ interface Reel {
 }
 
 const ReelsPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, awardPoints } = useAuth();
   const [reels, setReels] = useState<Reel[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,6 +43,35 @@ const ReelsPage: React.FC = () => {
     setActiveIndex(index);
   };
 
+  const handleUploadReel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setIsUploading(true);
+    try {
+      // Simulate upload
+      const simulatedVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
+      
+      await addDoc(collection(db, 'reels'), {
+        userId: user.uid,
+        displayName: user.displayName,
+        photoURL: user.photoURL || '',
+        videoUrl: simulatedVideoUrl,
+        description: "Check out my new reel! #HeartConnect",
+        likes: [],
+        views: 0,
+        createdAt: serverTimestamp()
+      });
+
+      await awardPoints(20); // Award points for uploading a reel
+      alert("Reel uploaded successfully!");
+    } catch (error) {
+      console.error("Error uploading reel:", error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="h-screen bg-black overflow-hidden relative">
       <div 
@@ -52,12 +82,13 @@ const ReelsPage: React.FC = () => {
         {reels.length > 0 ? (
           reels.map((reel, i) => (
             <div key={reel.id} className="h-screen w-full snap-start relative flex items-center justify-center">
-              {/* Video Placeholder (Using Image for Demo since we don't have real video processing yet) */}
-              <img 
+              <video 
                 src={reel.videoUrl} 
                 className="h-full w-full object-cover"
-                alt=""
-                referrerPolicy="no-referrer"
+                autoPlay={activeIndex === i}
+                loop
+                muted
+                playsInline
               />
               
               {/* Overlay UI */}
@@ -78,7 +109,7 @@ const ReelsPage: React.FC = () => {
                   <button className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:text-pink-500 transition-colors">
                     <Heart className="w-7 h-7" />
                   </button>
-                  <span className="text-white text-xs font-bold">{reel.likes.length}</span>
+                  <span className="text-white text-xs font-bold">{reel.likes?.length || 0}</span>
                 </div>
 
                 <div className="flex flex-col items-center gap-1">
@@ -119,10 +150,26 @@ const ReelsPage: React.FC = () => {
       </div>
 
       {/* Top Nav Overlay */}
-      <div className="absolute top-0 left-0 right-0 p-6 flex justify-center gap-8 z-20">
-        <button className="text-white/60 font-black text-lg hover:text-white transition-colors">Following</button>
-        <button className="text-white font-black text-lg border-b-2 border-white pb-1">For You</button>
+      <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20">
+        <div className="w-10" /> {/* Spacer */}
+        <div className="flex gap-8">
+          <button className="text-white/60 font-black text-lg hover:text-white transition-colors">Following</button>
+          <button className="text-white font-black text-lg border-b-2 border-white pb-1">For You</button>
+        </div>
+        <label className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white cursor-pointer hover:bg-white/20 transition-all">
+          <Play className="w-5 h-5 fill-white" />
+          <input type="file" accept="video/*" className="hidden" onChange={handleUploadReel} disabled={isUploading} />
+        </label>
       </div>
+
+      {isUploading && (
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-white font-bold">Uploading Reel...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

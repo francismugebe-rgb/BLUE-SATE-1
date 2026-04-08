@@ -17,6 +17,9 @@ interface DatingProfile {
   lookingFor: string;
   interests: string[];
   isDatingActive: boolean;
+  isVerified?: boolean;
+  proTier?: 'none' | 'bronze' | 'gold' | 'platinum';
+  phoneNumber?: string;
 }
 
 const DatingPage: React.FC = () => {
@@ -29,12 +32,6 @@ const DatingPage: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
-
-    // Check if profile is complete
-    if (!user.age || !user.gender || !user.isDatingActive) {
-      // Redirect to profile to complete
-      // For now we just show a message or handle it in UI
-    }
 
     const fetchProfiles = async () => {
       try {
@@ -62,23 +59,18 @@ const DatingPage: React.FC = () => {
     const targetProfile = profiles[currentIndex];
     
     if (direction === 'right') {
-      // Check for match
       try {
-        // 1. Add to my likes
         const myRef = doc(db, 'users', user.uid);
         await updateDoc(myRef, {
           likedUsers: arrayUnion(targetProfile.uid)
         });
 
-        // 2. Check if they liked me
         const targetRef = doc(db, 'users', targetProfile.uid);
         const targetSnap = await getDoc(targetRef);
         const targetData = targetSnap.data();
         
         if (targetData?.likedUsers?.includes(user.uid)) {
-          // IT'S A MATCH!
           setMatch(targetProfile);
-          // Create conversation
           await addDoc(collection(db, 'conversations'), {
             participants: [user.uid, targetProfile.uid],
             lastMessage: "You matched! Say hello.",
@@ -94,22 +86,31 @@ const DatingPage: React.FC = () => {
     setCurrentIndex(prev => prev + 1);
   };
 
-  if (!user?.isDatingActive) {
+  const handleWhatsAppChat = (phoneNumber?: string) => {
+    if (phoneNumber) {
+      const cleanNumber = phoneNumber.replace(/\D/g, '');
+      window.open(`https://wa.me/${cleanNumber}`, '_blank');
+    } else {
+      alert("This user hasn't provided a WhatsApp number yet.");
+    }
+  };
+
+  if (!user?.isDatingActive || !user?.age || !user?.gender || !user?.location) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-[3rem] p-12 text-center shadow-xl border border-slate-100">
           <div className="w-20 h-20 bg-pink-50 rounded-[2rem] flex items-center justify-center mx-auto mb-8">
             <Heart className="w-10 h-10 text-pink-500" />
           </div>
-          <h2 className="text-3xl font-black text-slate-900 mb-4">Join Dating</h2>
+          <h2 className="text-3xl font-black text-slate-900 mb-4">Complete Dating Profile</h2>
           <p className="text-slate-500 font-medium mb-8">
-            Complete your profile and activate dating mode to start matching with people near you.
+            To start matching, you need to provide your age, gender, and location in your profile.
           </p>
           <Link 
             to="/profile" 
             className="block w-full bg-pink-500 text-white py-4 rounded-2xl font-bold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20"
           >
-            Complete Profile
+            Go to Profile
           </Link>
         </div>
       </div>
@@ -174,11 +175,18 @@ const DatingPage: React.FC = () => {
 
               <div className="space-y-4">
                 <button 
+                  onClick={() => handleWhatsAppChat(match.phoneNumber)}
+                  className="w-full bg-green-500 text-white py-5 rounded-[2rem] font-black text-xl flex items-center justify-center gap-3 hover:bg-green-600 transition-all shadow-xl shadow-green-500/20"
+                >
+                  <MessageCircle className="w-6 h-6" />
+                  Chat on WhatsApp
+                </button>
+                <button 
                   onClick={() => navigate('/chat')}
                   className="w-full bg-white text-slate-900 py-5 rounded-[2rem] font-black text-xl flex items-center justify-center gap-3 hover:bg-slate-50 transition-all"
                 >
-                  <MessageCircle className="w-6 h-6" />
-                  Send a Message
+                  <Sparkles className="w-6 h-6" />
+                  In-App Chat
                 </button>
                 <button 
                   onClick={() => setMatch(null)}
@@ -210,6 +218,15 @@ const SwipeCard: React.FC<{ profile: DatingProfile, onSwipe: (dir: 'left' | 'rig
     }
   };
 
+  const getTierColor = (tier?: string) => {
+    switch(tier) {
+      case 'bronze': return 'bg-orange-500';
+      case 'gold': return 'bg-yellow-500';
+      case 'platinum': return 'bg-slate-300';
+      default: return 'bg-slate-500';
+    }
+  };
+
   return (
     <motion.div
       style={{ x, rotate, opacity, zIndex: isTop ? 10 : 0 }}
@@ -233,11 +250,21 @@ const SwipeCard: React.FC<{ profile: DatingProfile, onSwipe: (dir: 'left' | 'rig
         NOPE
       </motion.div>
 
+      {/* Pro Badge */}
+      {profile.proTier && profile.proTier !== 'none' && (
+        <div className={`absolute top-6 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-[10px] font-black text-white uppercase tracking-widest shadow-lg ${getTierColor(profile.proTier)}`}>
+          {profile.proTier} member
+        </div>
+      )}
+
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
       
       <div className="absolute bottom-0 left-0 right-0 p-8 text-white pointer-events-none">
         <div className="flex items-end gap-3 mb-2">
-          <h2 className="text-4xl font-black">{profile.displayName}, {profile.age}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-4xl font-black">{profile.displayName}, {profile.age}</h2>
+            {profile.isVerified && <Sparkles className="w-6 h-6 text-blue-400 fill-blue-400" />}
+          </div>
           <div className="bg-green-500 w-3 h-3 rounded-full mb-2" />
         </div>
         <div className="flex items-center gap-2 text-white/80 font-bold mb-4">

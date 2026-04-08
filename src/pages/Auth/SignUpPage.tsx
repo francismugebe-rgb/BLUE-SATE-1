@@ -5,7 +5,8 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 
 const SignUpPage: React.FC = () => {
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +19,7 @@ const SignUpPage: React.FC = () => {
     setError(null);
     setIsSubmitting(true);
     try {
-      await signup(email, password, name);
+      await signup(email, password, firstName, lastName);
       if (email === 'FRANCISMUGEBE@gmail.com') {
         navigate('/admin');
       } else {
@@ -64,18 +65,35 @@ const SignUpPage: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700 ml-1">Full Name</label>
-              <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input 
-                  type="text" 
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="John Doe"
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all"
-                  required
-                />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 ml-1">First Name</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input 
+                    type="text" 
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="John"
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 ml-1">Surname</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input 
+                    type="text" 
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Doe"
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all"
+                    required
+                  />
+                </div>
               </div>
             </div>
 

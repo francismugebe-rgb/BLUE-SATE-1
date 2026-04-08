@@ -10,6 +10,9 @@
         "displayName": { "type": "string", "description": "The user's full name" },
         "photoURL": { "type": "string", "format": "uri", "description": "The user's profile picture URL" },
         "role": { "type": "string", "enum": ["admin", "user"], "description": "The user's role in the system" },
+        "points": { "type": "number", "description": "User's earned points" },
+        "isVerified": { "type": "boolean", "description": "Whether the user is verified" },
+        "proTier": { "type": "string", "enum": ["none", "bronze", "gold", "platinum"], "description": "User's pro membership tier" },
         "createdAt": { "type": "string", "format": "date-time", "description": "When the user account was created" }
       },
       "required": ["uid", "email", "role"]
@@ -84,6 +87,42 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "senderId", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment on a post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "postId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "postId", "text", "createdAt"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application settings controlled by admin",
+      "type": "object",
+      "properties": {
+        "pointValues": {
+          "type": "object",
+          "properties": {
+            "post": { "type": "number" },
+            "comment": { "type": "number" },
+            "like": { "type": "number" }
+          }
+        },
+        "proPrices": {
+          "type": "object",
+          "properties": {
+            "bronze": { "type": "number" },
+            "gold": { "type": "number" },
+            "platinum": { "type": "number" }
+          }
+        }
+      }
     }
   },
   "firestore": {
@@ -98,6 +137,14 @@
     "/posts/{postId}": {
       "schema": "Post",
       "description": "Wall posts"
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Comments on a post"
+    },
+    "/settings/global": {
+      "schema": "Settings",
+      "description": "Global settings"
     },
     "/reels/{reelId}": {
       "schema": "Reel",
