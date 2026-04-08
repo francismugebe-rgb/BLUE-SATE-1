@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, query, getDocs, updateDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, query, getDocs, updateDoc, doc, onSnapshot, setDoc, orderBy, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { motion } from 'motion/react';
-import { Users, Shield, Sparkles, Settings, Save, Search, CheckCircle, XCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Users, Shield, Sparkles, Settings, Save, Search, CheckCircle, XCircle, CreditCard, Wallet, Check, X, ShieldCheck } from 'lucide-react';
 
 interface UserProfile {
   uid: string;
@@ -12,12 +13,26 @@ interface UserProfile {
   isVerified: boolean;
   proTier: string;
   points: number;
+  walletBalance?: number;
+}
+
+interface Payment {
+  id: string;
+  userId: string;
+  amount: number;
+  type: string;
+  status: string;
+  method: string;
+  proofUrl?: string;
+  createdAt: any;
+  userEmail?: string;
 }
 
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'users' | 'settings'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'settings' | 'payments'>('users');
   const [settings, setSettings] = useState({
     pointValuePost: 10,
     pointValueLike: 2,
@@ -45,7 +60,19 @@ const AdminDashboard: React.FC = () => {
     };
     fetchSettings();
 
-    return () => unsubscribe();
+    const paymentsQ = query(collection(db, 'payments'), orderBy('createdAt', 'desc'));
+    const unsubscribePayments = onSnapshot(paymentsQ, (snapshot) => {
+      const paymentsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Payment[];
+      setPayments(paymentsData);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribePayments();
+    };
   }, []);
 
   const handleUpdateUser = async (uid: string, data: Partial<UserProfile>) => {
@@ -53,6 +80,48 @@ const AdminDashboard: React.FC = () => {
       await updateDoc(doc(db, 'users', uid), data);
     } catch (error) {
       console.error("Error updating user:", error);
+    }
+  };
+
+  const handleApprovePayment = async (payment: Payment) => {
+    try {
+      const paymentRef = doc(db, 'payments', payment.id);
+      await updateDoc(paymentRef, { status: 'approved' });
+
+      if (payment.type === 'deposit') {
+        const userRef = doc(db, 'users', payment.userId);
+        const userSnap = await getDoc(userRef);
+        const currentBalance = userSnap.data()?.walletBalance || 0;
+        await updateDoc(userRef, { walletBalance: currentBalance + payment.amount });
+      }
+
+      // Add notification
+      await addDoc(collection(db, 'notifications'), {
+        userId: payment.userId,
+        type: 'payment_approved',
+        text: `Your payment of ${payment.amount} has been approved.`,
+        read: false,
+        createdAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Error approving payment:", error);
+    }
+  };
+
+  const handleRejectPayment = async (payment: Payment) => {
+    try {
+      await updateDoc(doc(db, 'payments', payment.id), { status: 'rejected' });
+      
+      // Add notification
+      await addDoc(collection(db, 'notifications'), {
+        userId: payment.userId,
+        type: 'payment_rejected',
+        text: `Your payment of ${payment.amount} has been rejected.`,
+        read: false,
+        createdAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Error rejecting payment:", error);
     }
   };
 
@@ -90,6 +159,13 @@ const AdminDashboard: React.FC = () => {
               <Settings className="w-4 h-4" />
               Settings
             </button>
+            <button 
+              onClick={() => setActiveTab('payments')}
+              className={`px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${activeTab === 'payments' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <CreditCard className="w-4 h-4" />
+              Payments
+            </button>
           </div>
         </div>
 
@@ -111,9 +187,10 @@ const AdminDashboard: React.FC = () => {
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">User</th>
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Role</th>
                     <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Verification</th>
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Wallet</th>
                     <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Pro Tier</th>
-                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Points</th>
                     <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
@@ -125,6 +202,16 @@ const AdminDashboard: React.FC = () => {
                         <div className="text-sm text-slate-500 font-medium">{u.email}</div>
                       </td>
                       <td className="px-8 py-6">
+                        <select 
+                          value={u.role}
+                          onChange={(e) => handleUpdateUser(u.uid, { role: e.target.value })}
+                          className={`bg-slate-100 border-none rounded-xl px-4 py-2 text-sm font-bold outline-none ${u.role === 'admin' ? 'text-pink-500' : 'text-slate-700'}`}
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                      <td className="px-8 py-6">
                         <button 
                           onClick={() => handleUpdateUser(u.uid, { isVerified: !u.isVerified })}
                           className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${u.isVerified ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-400'}`}
@@ -132,6 +219,25 @@ const AdminDashboard: React.FC = () => {
                           {u.isVerified ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                           {u.isVerified ? 'Verified' : 'Unverified'}
                         </button>
+                      </td>
+                      <td className="px-8 py-6">
+                        <div className="flex items-center gap-2">
+                          <div className="bg-slate-100 px-3 py-1.5 rounded-xl flex items-center gap-2">
+                            <Wallet className="w-4 h-4 text-slate-400" />
+                            <span className="font-black text-slate-900">${u.walletBalance || 0}</span>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              const amount = prompt("Enter amount to add:");
+                              if (amount && !isNaN(Number(amount))) {
+                                handleUpdateUser(u.uid, { walletBalance: (u.walletBalance || 0) + Number(amount) });
+                              }
+                            }}
+                            className="p-2 text-pink-500 hover:bg-pink-50 rounded-xl transition-all"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                       <td className="px-8 py-6">
                         <select 
@@ -146,19 +252,82 @@ const AdminDashboard: React.FC = () => {
                         </select>
                       </td>
                       <td className="px-8 py-6">
-                        <div className="flex items-center gap-2 font-black text-slate-900">
-                          <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                          {u.points || 0}
-                        </div>
-                      </td>
-                      <td className="px-8 py-6">
-                        <button className="text-pink-500 font-bold text-sm hover:underline">Edit Profile</button>
+                        <Link to={`/profile/${u.uid}`} className="text-pink-500 font-bold text-sm hover:underline">View Profile</Link>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </div>
+        ) : activeTab === 'payments' ? (
+          <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">User</th>
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Amount</th>
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Type</th>
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Proof</th>
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {payments.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-8 py-6">
+                      <div className="font-black text-slate-900">User {p.userId.slice(0, 8)}</div>
+                      <div className="text-xs text-slate-400 font-bold uppercase tracking-widest">
+                        {p.createdAt?.toDate?.()?.toLocaleDateString() || 'Recently'}
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="font-black text-slate-900">${p.amount}</div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-600">
+                        {p.type}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                        p.status === 'approved' ? 'bg-green-50 text-green-600' :
+                        p.status === 'rejected' ? 'bg-red-50 text-red-600' :
+                        'bg-yellow-50 text-yellow-600'
+                      }`}>
+                        {p.status}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      {p.proofUrl ? (
+                        <a href={p.proofUrl} target="_blank" rel="noreferrer" className="text-pink-500 font-bold text-xs hover:underline">View Proof</a>
+                      ) : (
+                        <span className="text-slate-300 text-xs font-bold italic">No proof</span>
+                      )}
+                    </td>
+                    <td className="px-8 py-6">
+                      {p.status === 'pending' && (
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => handleApprovePayment(p)}
+                            className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all shadow-lg shadow-green-500/20"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleRejectPayment(p)}
+                            className="p-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-8">

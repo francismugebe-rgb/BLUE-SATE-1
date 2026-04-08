@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { motion } from 'motion/react';
-import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck } from 'lucide-react';
+import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
+import { db } from '../../lib/firebase';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
 
 const COUNTRIES_CITIES: Record<string, string[]> = {
@@ -15,10 +17,15 @@ const COUNTRIES_CITIES: Record<string, string[]> = {
 
 export default function ProfilePage() {
   const { user, updateProfile } = useAuth();
+  const { userId } = useParams();
+  const navigate = useNavigate();
   const location = useLocation();
+  const [targetUser, setTargetUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState<'photo' | 'cover' | null>(null);
+  const [friendStatus, setFriendStatus] = useState<'none' | 'pending' | 'friends'>('none');
   const profileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const hasInitialized = useRef(false);
@@ -26,6 +33,136 @@ export default function ProfilePage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning', text: string } | null>(
     location.state?.incomplete ? { type: 'warning', text: 'Please fill in your Name and Surname to continue using the app.' } : null
   );
+
+  const isOwnProfile = !userId || userId === user?.uid;
+
+  useEffect(() => {
+    if (isOwnProfile) {
+      setTargetUser(user);
+      setLoading(false);
+    } else {
+      const fetchTargetUser = async () => {
+        try {
+          const docRef = doc(db, 'users', userId!);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setTargetUser({ uid: docSnap.id, ...docSnap.data() });
+          } else {
+            setMessage({ type: 'error', text: 'User not found' });
+          }
+        } catch (error) {
+          console.error("Error fetching user:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchTargetUser();
+    }
+  }, [userId, user, isOwnProfile]);
+
+  useEffect(() => {
+    if (!user || isOwnProfile || !userId) return;
+
+    // Check friend status
+    const q = query(
+      collection(db, 'friendRequests'),
+      where('fromId', 'in', [user.uid, userId]),
+      where('toId', 'in', [user.uid, userId])
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (snapshot.empty) {
+        if (user.friends?.includes(userId)) {
+          setFriendStatus('friends');
+        } else {
+          setFriendStatus('none');
+        }
+      } else {
+        const request = snapshot.docs[0].data();
+        if (request.status === 'accepted') {
+          setFriendStatus('friends');
+        } else {
+          setFriendStatus('pending');
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user, userId, isOwnProfile]);
+
+  const handleAddFriend = async () => {
+    if (!user || !userId) return;
+    try {
+      await addDoc(collection(db, 'friendRequests'), {
+        fromId: user.uid,
+        toId: userId,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+
+      // Add notification
+      await addDoc(collection(db, 'notifications'), {
+        userId: userId,
+        type: 'friend_request',
+        fromId: user.uid,
+        fromName: user.displayName || user.email,
+        text: `${user.displayName || user.email} sent you a friend request.`,
+        link: `/profile/${user.uid}`,
+        read: false,
+        createdAt: serverTimestamp()
+      });
+
+      setMessage({ type: 'success', text: 'Friend request sent!' });
+    } catch (error) {
+      console.error("Error adding friend:", error);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!user || !userId) return;
+    try {
+      const myRef = doc(db, 'users', user.uid);
+      const targetRef = doc(db, 'users', userId);
+
+      await updateDoc(myRef, {
+        following: arrayUnion(userId)
+      });
+      await updateDoc(targetRef, {
+        followers: arrayUnion(user.uid)
+      });
+
+      setMessage({ type: 'success', text: `Following ${targetUser?.displayName}` });
+    } catch (error) {
+      console.error("Error following:", error);
+    }
+  };
+
+  const handleMessage = async () => {
+    if (!user || !userId) return;
+    try {
+      // Check if conversation exists
+      const q = query(
+        collection(db, 'conversations'),
+        where('participants', 'array-contains', user.uid)
+      );
+      const snapshot = await getDocs(q);
+      let existingConv = snapshot.docs.find(doc => doc.data().participants.includes(userId));
+
+      if (existingConv) {
+        navigate('/chat');
+      } else {
+        const newConv = await addDoc(collection(db, 'conversations'), {
+          participants: [user.uid, userId],
+          lastMessage: '',
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp()
+        });
+        navigate('/chat');
+      }
+    } catch (error) {
+      console.error("Error messaging:", error);
+    }
+  };
 
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
@@ -42,23 +179,23 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    if (user && !hasInitialized.current) {
+    if (targetUser && !hasInitialized.current) {
       setFormData({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        bio: user.bio || '',
-        age: user.age || 18,
-        country: user.location?.split(', ')[1] || '',
-        city: user.location?.split(', ')[0] || '',
-        gender: user.gender || '',
-        lookingFor: user.lookingFor || '',
-        interests: user.interests?.join(', ') || '',
-        isDatingActive: user.isDatingActive || false,
-        phoneNumber: user.phoneNumber || ''
+        firstName: targetUser.firstName || '',
+        lastName: targetUser.lastName || '',
+        bio: targetUser.bio || '',
+        age: targetUser.age || 18,
+        country: targetUser.location?.split(', ')[1] || '',
+        city: targetUser.location?.split(', ')[0] || '',
+        gender: targetUser.gender || '',
+        lookingFor: targetUser.lookingFor || '',
+        interests: targetUser.interests?.join(', ') || '',
+        isDatingActive: targetUser.isDatingActive || false,
+        phoneNumber: targetUser.phoneNumber || ''
       });
-      hasInitialized.current = true;
+      if (isOwnProfile) hasInitialized.current = true;
     }
-  }, [user]);
+  }, [targetUser, isOwnProfile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,6 +310,12 @@ export default function ProfilePage() {
     }
   };
 
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
@@ -182,24 +325,58 @@ export default function ProfilePage() {
             Back to Home
           </Link>
           <div className="flex items-center gap-4">
-            <div className="bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-              <span className="text-sm font-black text-slate-900">{user?.points || 0} Points</span>
-            </div>
-            {!isEditing ? (
-              <button 
-                onClick={() => setIsEditing(true)}
-                className="bg-pink-500 text-white px-6 py-2 rounded-xl font-bold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20"
-              >
-                Edit Profile
-              </button>
+            {isOwnProfile && (
+              <div className="bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                <span className="text-sm font-black text-slate-900">{user?.points || 0} Points</span>
+              </div>
+            )}
+            {isOwnProfile ? (
+              !isEditing ? (
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  className="bg-pink-500 text-white px-6 py-2 rounded-xl font-bold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20"
+                >
+                  Edit Profile
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setIsEditing(false)}
+                  className="bg-slate-100 text-slate-600 px-6 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                >
+                  Cancel
+                </button>
+              )
             ) : (
-              <button 
-                onClick={() => setIsEditing(false)}
-                className="bg-slate-100 text-slate-600 px-6 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all"
-              >
-                Cancel
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleMessage}
+                  className="bg-white text-slate-600 p-2 rounded-xl border border-slate-100 hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={handleFollow}
+                  className="bg-white text-slate-600 px-4 py-2 rounded-xl border border-slate-100 font-bold hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2"
+                >
+                  {user?.following?.includes(userId!) ? <UserCheck className="w-4 h-4 text-green-500" /> : <UserPlus className="w-4 h-4" />}
+                  {user?.following?.includes(userId!) ? 'Following' : 'Follow'}
+                </button>
+                <button 
+                  onClick={handleAddFriend}
+                  disabled={friendStatus !== 'none'}
+                  className={`px-6 py-2 rounded-xl font-bold transition-all shadow-lg flex items-center gap-2 ${
+                    friendStatus === 'friends' 
+                      ? 'bg-green-500 text-white shadow-green-500/20' 
+                      : friendStatus === 'pending'
+                        ? 'bg-slate-100 text-slate-400 shadow-none cursor-not-allowed'
+                        : 'bg-pink-500 text-white shadow-pink-500/20 hover:bg-pink-600'
+                  }`}
+                >
+                  {friendStatus === 'friends' ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                  {friendStatus === 'friends' ? 'Friends' : friendStatus === 'pending' ? 'Request Sent' : 'Add Friend'}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -223,8 +400,8 @@ export default function ProfilePage() {
             <form onSubmit={handleSubmit} className="space-y-8">
               {/* Cover Photo Section */}
               <div className="relative h-48 md:h-64 bg-slate-100 rounded-[2rem] overflow-hidden group">
-                {(previews.cover || user?.coverURL) ? (
-                  <img src={previews.cover || user?.coverURL} alt="Cover" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                {(previews.cover || targetUser?.coverURL) ? (
+                  <img src={previews.cover || targetUser?.coverURL} alt="Cover" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-300">
                     <ImageIcon className="w-12 h-12" />
@@ -260,8 +437,8 @@ export default function ProfilePage() {
               <div className="flex flex-col md:flex-row items-center gap-8 pb-8 border-b border-slate-100 -mt-20 relative z-10 px-8">
                 <div className="relative group">
                   <div className="w-40 h-40 bg-pink-50 rounded-[2.5rem] flex items-center justify-center overflow-hidden border-8 border-white shadow-xl relative">
-                    {(previews.photo || user?.photoURL) ? (
-                      <img src={previews.photo || user?.photoURL} alt={user?.displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    {(previews.photo || targetUser?.photoURL) ? (
+                      <img src={previews.photo || targetUser?.photoURL} alt={targetUser?.displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
                       <User className="w-16 h-16 text-pink-300" />
                     )}
@@ -290,7 +467,7 @@ export default function ProfilePage() {
                     accept="image/*"
                     onChange={(e) => handlePhotoUpload(e, 'photo')}
                   />
-                  {user?.isVerified && (
+                  {targetUser?.isVerified && (
                     <div className="absolute bottom-2 right-2 w-10 h-10 bg-blue-500 rounded-xl shadow-md border-4 border-white flex items-center justify-center text-white">
                       <Sparkles className="w-5 h-5 fill-white" />
                     </div>
@@ -299,16 +476,32 @@ export default function ProfilePage() {
                 <div className="flex-1 text-center md:text-left pt-16 md:pt-0">
                   <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
                     <h2 className="text-2xl font-black text-slate-900">
-                      {formData.firstName || formData.lastName ? `${formData.firstName} ${formData.lastName}` : 'Set your name'}
+                      {isOwnProfile ? (formData.firstName || formData.lastName ? `${formData.firstName} ${formData.lastName}` : 'Set your name') : targetUser?.displayName}
                     </h2>
-                    {user?.proTier && user.proTier !== 'none' && (
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white uppercase tracking-widest ${getTierColor(user.proTier)}`}>
-                        {user.proTier}
+                    {targetUser?.proTier && targetUser.proTier !== 'none' && (
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white uppercase tracking-widest ${getTierColor(targetUser.proTier)}`}>
+                        {targetUser.proTier}
                       </span>
                     )}
                   </div>
-                  <p className="text-slate-500 font-medium">{user?.email}</p>
-                  <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-3">
+                  <p className="text-slate-500 font-medium">{targetUser?.email}</p>
+                  
+                  <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-6">
+                    <div className="text-center md:text-left">
+                      <p className="text-lg font-black text-slate-900">{targetUser?.followers?.length || 0}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Followers</p>
+                    </div>
+                    <div className="text-center md:text-left">
+                      <p className="text-lg font-black text-slate-900">{targetUser?.following?.length || 0}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Following</p>
+                    </div>
+                    <div className="text-center md:text-left">
+                      <p className="text-lg font-black text-slate-900">{targetUser?.friends?.length || 0}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Friends</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex flex-wrap justify-center md:justify-start gap-3">
                     <label className={`flex items-center gap-2 px-4 py-2 bg-pink-50 text-pink-600 rounded-xl transition-all ${isEditing ? 'cursor-pointer hover:bg-pink-100' : 'opacity-70'}`}>
                       <input 
                         type="checkbox" 

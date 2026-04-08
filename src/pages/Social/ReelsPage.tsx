@@ -158,13 +158,9 @@ const ReelsPage: React.FC = () => {
 
               {/* Bottom Info */}
               <div className="absolute bottom-10 left-4 right-16 z-10">
-                {reel.userId === user?.uid ? (
-                  <Link to="/profile" className="inline-block">
-                    <h3 className="text-white font-black text-lg mb-2 hover:text-pink-500 transition-colors">@{reel.displayName || 'user'}</h3>
-                  </Link>
-                ) : (
-                  <h3 className="text-white font-black text-lg mb-2">@{reel.displayName || 'user'}</h3>
-                )}
+                <Link to={`/profile/${reel.userId}`} className="inline-block">
+                  <h3 className="text-white font-black text-lg mb-2 hover:text-pink-500 transition-colors">@{reel.displayName || 'user'}</h3>
+                </Link>
                 <p className="text-white/90 text-sm font-medium mb-4 line-clamp-2">
                   {reel.description}
                 </p>

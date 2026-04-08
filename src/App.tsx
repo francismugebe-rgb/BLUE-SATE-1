@@ -1,7 +1,7 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useState, useRef, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Heart, Sparkles, ArrowRight, Shield, Zap, Users, LogOut, MessageCircle, User, Play, MapPin } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Heart, Sparkles, ArrowRight, Shield, Zap, Users, LogOut, MessageCircle, User, Play, MapPin, Bell, ChevronDown, Settings, ShieldCheck, Wallet } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 // Lazy load pages
 const LoginPage = lazy(() => import('./pages/Auth/LoginPage'));
@@ -13,6 +13,8 @@ const ReelsPage = lazy(() => import('./pages/Social/ReelsPage'));
 const DatingPage = lazy(() => import('./pages/Dating/DatingPage'));
 const ChatPage = lazy(() => import('./pages/Social/ChatPage'));
 
+import { collection, query, where, orderBy, limit, onSnapshot, getDocs, updateDoc, doc, arrayUnion, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from './lib/firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; role?: 'admin' | 'user' }> = ({ children, role }) => {
@@ -42,6 +44,78 @@ const Navigation: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+      limit(10)
+    );
+    return onSnapshot(q, (snapshot) => {
+      setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+  }, [user]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleAcceptFriend = async (notif: any) => {
+    try {
+      // Update friend request
+      const q = query(
+        collection(db, 'friendRequests'),
+        where('fromId', '==', notif.fromId),
+        where('toId', '==', user?.uid),
+        where('status', '==', 'pending')
+      );
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        await updateDoc(doc(db, 'friendRequests', snapshot.docs[0].id), { status: 'accepted' });
+      }
+
+      // Update both users' friends lists
+      await updateDoc(doc(db, 'users', user!.uid), {
+        friends: arrayUnion(notif.fromId)
+      });
+      await updateDoc(doc(db, 'users', notif.fromId), {
+        friends: arrayUnion(user!.uid)
+      });
+
+      // Mark notification as read
+      await updateDoc(doc(db, 'notifications', notif.id), { read: true });
+
+      // Send acceptance notification
+      await addDoc(collection(db, 'notifications'), {
+        userId: notif.fromId,
+        type: 'friend_accept',
+        fromId: user!.uid,
+        fromName: user!.displayName || user!.email,
+        text: `${user!.displayName || user!.email} accepted your friend request!`,
+        link: `/profile/${user!.uid}`,
+        read: false,
+        createdAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Error accepting friend:", error);
+    }
+  };
 
   if (!user) return null;
 
@@ -83,8 +157,77 @@ const Navigation: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            {user && (
-              <Link to="/profile" className="flex items-center gap-2 hover:bg-slate-50 px-3 py-1.5 rounded-xl transition-all group">
+            <div className="relative" ref={notificationsRef}>
+              <button 
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className="p-2 text-slate-400 hover:text-pink-500 transition-colors relative"
+              >
+                <Bell className="w-6 h-6" />
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-1 right-1 w-4 h-4 bg-pink-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                    {notifications.filter(n => !n.read).length}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {isNotificationsOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden py-2"
+                  >
+                    <div className="px-4 py-3 border-b border-slate-50 flex items-center justify-between">
+                      <h3 className="font-black text-slate-900">Notifications</h3>
+                      <button className="text-xs font-bold text-pink-500 hover:underline">Mark all as read</button>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {notifications.length > 0 ? (
+                        notifications.map((n) => (
+                          <div key={n.id} className={`p-4 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${!n.read ? 'bg-pink-50/30' : ''}`}>
+                            <div className="flex gap-3">
+                              <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0">
+                                <Bell className="w-5 h-5 text-pink-500" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm text-slate-700 font-medium leading-tight mb-2">{n.text}</p>
+                                {n.type === 'friend_request' && !n.read && (
+                                  <div className="flex gap-2">
+                                    <button 
+                                      onClick={() => handleAcceptFriend(n)}
+                                      className="px-3 py-1 bg-pink-500 text-white text-xs font-bold rounded-lg hover:bg-pink-600 transition-all"
+                                    >
+                                      Accept
+                                    </button>
+                                    <button className="px-3 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-lg hover:bg-slate-200 transition-all">
+                                      Decline
+                                    </button>
+                                  </div>
+                                )}
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
+                                  {n.createdAt?.toDate?.()?.toLocaleTimeString() || 'Just now'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-8 text-center">
+                          <p className="text-slate-400 font-bold text-sm">No notifications yet</p>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="relative" ref={dropdownRef}>
+              <button 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center gap-2 hover:bg-slate-50 px-3 py-1.5 rounded-xl transition-all group"
+              >
                 <div className="w-8 h-8 rounded-full bg-pink-50 overflow-hidden border border-pink-100">
                   {user.photoURL ? (
                     <img src={user.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -97,19 +240,77 @@ const Navigation: React.FC = () => {
                 <span className="text-sm font-black text-slate-700 group-hover:text-pink-500 transition-colors">
                   {user.displayName || user.email.split('@')[0]}
                 </span>
-              </Link>
-            )}
-            {user.role === 'admin' && (
-              <Link to="/admin" className="text-sm font-bold text-pink-500 hover:text-pink-600 transition-colors">
-                Admin
-              </Link>
-            )}
-            <button 
-              onClick={logout}
-              className="p-2 text-slate-400 hover:text-pink-500 transition-colors"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              <AnimatePresence>
+                {isDropdownOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden py-2"
+                  >
+                    <div className="px-4 py-3 border-b border-slate-50 mb-2">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Account</p>
+                      <p className="text-sm font-black text-slate-900 truncate">{user.email}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="flex items-center gap-1 bg-pink-50 text-pink-500 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
+                          <Sparkles className="w-3 h-3" />
+                          {user.proTier || 'Free'}
+                        </div>
+                        <div className="flex items-center gap-1 bg-slate-50 text-slate-500 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
+                          <Wallet className="w-3 h-3" />
+                          ${user.walletBalance || 0}
+                        </div>
+                      </div>
+                    </div>
+
+                    <Link 
+                      to="/profile" 
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-pink-500 transition-colors"
+                    >
+                      <User className="w-4 h-4" />
+                      My Profile
+                    </Link>
+
+                    {user.role === 'admin' && (
+                      <Link 
+                        to="/admin" 
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2 text-sm font-bold text-pink-500 hover:bg-pink-50 transition-colors"
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                        Admin Panel
+                      </Link>
+                    )}
+
+                    <Link 
+                      to="/profile" 
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      <Settings className="w-4 h-4" />
+                      Settings
+                    </Link>
+
+                    <div className="h-px bg-slate-50 my-2" />
+
+                    <button 
+                      onClick={() => {
+                        logout();
+                        setIsDropdownOpen(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2 text-sm font-bold text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </nav>
@@ -511,7 +712,7 @@ const AuthConsumer: React.FC = () => {
             } 
           />
           <Route 
-            path="/profile" 
+            path="/profile/:userId?" 
             element={
               <ProtectedRoute>
                 <ProfilePage />

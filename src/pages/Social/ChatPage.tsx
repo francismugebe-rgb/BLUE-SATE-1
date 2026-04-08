@@ -110,6 +110,21 @@ const ChatPage: React.FC = () => {
         lastMessage: text,
         updatedAt: serverTimestamp()
       });
+
+      // Send notification to other participant
+      const otherId = activeConv.participants.find(id => id !== user.uid);
+      if (otherId) {
+        await addDoc(collection(db, 'notifications'), {
+          userId: otherId,
+          type: 'new_message',
+          fromId: user.uid,
+          fromName: user.displayName || user.email,
+          text: `New message from ${user.displayName || user.email}`,
+          link: '/chat',
+          read: false,
+          createdAt: serverTimestamp()
+        });
+      }
     } catch (error) {
       console.error("Error sending message:", error);
     }

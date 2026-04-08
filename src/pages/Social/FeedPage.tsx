@@ -273,13 +273,9 @@ const FeedPage: React.FC = () => {
                       </div>
                       <div>
                         <div className="flex items-center gap-1">
-                          {post.userId === user?.uid ? (
-                            <Link to="/profile" className="hover:text-pink-500 transition-colors">
-                              <h3 className="font-black text-slate-900 leading-none">{post.displayName}</h3>
-                            </Link>
-                          ) : (
+                          <Link to={`/profile/${post.userId}`} className="hover:text-pink-500 transition-colors">
                             <h3 className="font-black text-slate-900 leading-none">{post.displayName}</h3>
-                          )}
+                          </Link>
                           {post.isVerified && <Sparkles className="w-3 h-3 text-blue-500 fill-blue-500" />}
                         </div>
                         <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">

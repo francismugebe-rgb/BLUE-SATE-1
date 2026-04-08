@@ -13,6 +13,10 @@
         "points": { "type": "number", "description": "User's earned points" },
         "isVerified": { "type": "boolean", "description": "Whether the user is verified" },
         "proTier": { "type": "string", "enum": ["none", "bronze", "gold", "platinum"], "description": "User's pro membership tier" },
+        "walletBalance": { "type": "number", "description": "User's wallet balance for payments" },
+        "followers": { "type": "array", "items": { "type": "string" }, "description": "UIDs of users following this user" },
+        "following": { "type": "array", "items": { "type": "string" }, "description": "UIDs of users this user is following" },
+        "friends": { "type": "array", "items": { "type": "string" }, "description": "UIDs of friends" },
         "createdAt": { "type": "string", "format": "date-time", "description": "When the user account was created" }
       },
       "required": ["uid", "email", "role"]
@@ -101,6 +105,52 @@
       },
       "required": ["id", "userId", "postId", "text", "createdAt"]
     },
+    "FriendRequest": {
+      "title": "Friend Request",
+      "description": "A request to connect between two users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fromId": { "type": "string" },
+        "toId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "fromId", "toId", "status", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification for a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["friend_request", "friend_accept", "message", "like", "comment"] },
+        "fromId": { "type": "string" },
+        "fromName": { "type": "string" },
+        "text": { "type": "string" },
+        "link": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "type", "text", "read", "createdAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "A payment or wallet transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["deposit", "withdrawal", "pro_upgrade"] },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "method": { "type": "string" },
+        "proofUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "amount", "type", "status", "createdAt"]
+    },
     "Settings": {
       "title": "Settings",
       "description": "Global application settings controlled by admin",
@@ -157,6 +207,18 @@
     "/conversations/{conversationId}/messages/{messageId}": {
       "schema": "Message",
       "description": "Messages within a conversation"
+    },
+    "/friendRequests/{requestId}": {
+      "schema": "FriendRequest",
+      "description": "Friend requests"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Payment transactions"
     }
   }
 }

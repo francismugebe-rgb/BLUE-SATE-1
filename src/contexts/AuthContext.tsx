@@ -96,6 +96,11 @@ interface UserProfile {
   isVerified?: boolean;
   proTier?: 'none' | 'bronze' | 'gold' | 'platinum';
   phoneNumber?: string;
+  walletBalance?: number;
+  followers?: string[];
+  following?: string[];
+  friends?: string[];
+  createdAt?: any;
 }
 
 interface AuthContextType {
