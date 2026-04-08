@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck } from 'lucide-react';
+import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet } from 'lucide-react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDocs, or, and } from 'firebase/firestore';
@@ -27,6 +27,8 @@ export default function ProfilePage() {
   const [isUploading, setIsUploading] = useState<'photo' | 'cover' | null>(null);
   const [friendStatus, setFriendStatus] = useState<'none' | 'pending' | 'friends'>('none');
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('10');
   const [selectedTier, setSelectedTier] = useState<'bronze' | 'gold' | 'platinum'>('bronze');
   const profileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +101,26 @@ export default function ProfilePage() {
 
   const handleAddFriend = async () => {
     if (!user || !userId) return;
+
+    // Check Pro Status and Limits
+    const isPro = user.proTier && user.proTier !== 'none' && user.proExpiration?.toDate() > new Date();
+    const currentFriendsCount = user.friends?.length || 0;
+    let limit = 1; // Free limit
+
+    if (isPro) {
+      if (user.proTier === 'bronze') limit = 3;
+      else if (user.proTier === 'gold') limit = 10;
+      else if (user.proTier === 'platinum') limit = Infinity;
+    }
+
+    if (currentFriendsCount >= limit) {
+      setMessage({ 
+        type: 'error', 
+        text: `You have reached your friend limit (${limit}). Upgrade your plan for more matches!` 
+      });
+      return;
+    }
+
     try {
       await addDoc(collection(db, 'friendRequests'), {
         fromId: user.uid,
@@ -308,6 +330,25 @@ export default function ProfilePage() {
     }
   };
 
+  const handleRequestDeposit = async () => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'payments'), {
+        userId: user.uid,
+        userName: user.displayName || user.email,
+        amount: parseFloat(depositAmount),
+        type: 'deposit',
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+      setMessage({ type: 'success', text: 'Deposit request sent! Please wait for admin approval.' });
+      setIsDepositModalOpen(false);
+    } catch (error) {
+      console.error("Error requesting deposit:", error);
+      setMessage({ type: 'error', text: 'Failed to send deposit request.' });
+    }
+  };
+
   const handleRequestUpgrade = async () => {
     if (!user) return;
     try {
@@ -353,9 +394,23 @@ export default function ProfilePage() {
           </Link>
           <div className="flex items-center gap-4">
             {isOwnProfile && (
-              <div className="bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                <span className="text-sm font-black text-slate-900">{user?.points || 0} Points</span>
+              <div className="flex items-center gap-4">
+                <div className="bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Wallet</span>
+                    <span className="text-sm font-black text-slate-900">${user?.walletBalance || 0}</span>
+                  </div>
+                  <button 
+                    onClick={() => setIsDepositModalOpen(true)}
+                    className="p-2 bg-pink-50 text-pink-500 rounded-xl hover:bg-pink-100 transition-all"
+                  >
+                    <Wallet className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                  <span className="text-sm font-black text-slate-900">{user?.points || 0} Points</span>
+                </div>
               </div>
             )}
             {isOwnProfile ? (
@@ -568,6 +623,54 @@ export default function ProfilePage() {
 
               {/* Form Fields */}
               <AnimatePresence>
+                {isDepositModalOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6"
+                  >
+                    <motion.div 
+                      initial={{ scale: 0.9, y: 20 }}
+                      animate={{ scale: 1, y: 0 }}
+                      className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl"
+                    >
+                      <h3 className="text-2xl font-black text-slate-900 mb-2">Add Money to Wallet</h3>
+                      <p className="text-slate-500 font-medium mb-8">Enter the amount you want to deposit. An admin will verify your payment.</p>
+                      
+                      <div className="space-y-4 mb-8">
+                        <div>
+                          <label className="text-sm font-bold text-slate-700 ml-1">Amount ($)</label>
+                          <input 
+                            type="number"
+                            value={depositAmount}
+                            onChange={(e) => setDepositAmount(e.target.value)}
+                            className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium"
+                            placeholder="Enter amount"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-4">
+                        <button 
+                          type="button"
+                          onClick={() => setIsDepositModalOpen(false)}
+                          className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={handleRequestDeposit}
+                          className="flex-1 py-4 bg-pink-500 text-white rounded-2xl font-bold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20"
+                        >
+                          Deposit
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+
                 {isUpgradeModalOpen && (
                   <motion.div 
                     initial={{ opacity: 0 }}

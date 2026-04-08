@@ -100,7 +100,12 @@ const AdminDashboard: React.FC = () => {
         await updateDoc(userRef, { walletBalance: currentBalance + payment.amount });
       } else if (payment.type === 'upgrade') {
         const userRef = doc(db, 'users', payment.userId);
-        await updateDoc(userRef, { proTier: payment.tier });
+        const expirationDate = new Date();
+        expirationDate.setMonth(expirationDate.getMonth() + 1);
+        await updateDoc(userRef, { 
+          proTier: payment.tier,
+          proExpiration: expirationDate
+        });
       }
 
       // Add notification

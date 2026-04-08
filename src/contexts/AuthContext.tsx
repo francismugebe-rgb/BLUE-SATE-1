@@ -95,6 +95,7 @@ interface UserProfile {
   points?: number;
   isVerified?: boolean;
   proTier?: 'none' | 'bronze' | 'gold' | 'platinum';
+  proExpiration?: any;
   phoneNumber?: string;
   walletBalance?: number;
   followers?: string[];

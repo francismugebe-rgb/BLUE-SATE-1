@@ -22,6 +22,7 @@ interface Post {
   photoURL?: string;
   isVerified?: boolean;
   isBoosted?: boolean;
+  isSponsored?: boolean;
   boostUntil?: any;
   boostAmount?: number;
 }
@@ -142,42 +143,89 @@ const FeedPage: React.FC = () => {
 
   const handleBoost = async (postId: string) => {
     if (!user) return;
-    if ((user.walletBalance || 0) < boostData.amount) {
-      alert("Insufficient wallet balance!");
+
+    // Check Pro Status and Boost Limits
+    const isPro = user.proTier && user.proTier !== 'none' && user.proExpiration?.toDate() > new Date();
+    
+    if (!isPro) {
+      alert("Only Pro members can boost posts! Upgrade your account to boost.");
+      return;
+    }
+
+    // Check active boosts
+    const activeBoosts = posts.filter(p => p.userId === user.uid && p.isBoosted).length;
+    let boostLimit = 0;
+    let boostDurationDays = 0;
+
+    if (user.proTier === 'bronze') {
+      boostLimit = 1;
+      boostDurationDays = 5;
+    } else if (user.proTier === 'gold') {
+      boostLimit = 1;
+      boostDurationDays = 7;
+    } else if (user.proTier === 'platinum') {
+      boostLimit = 5;
+      boostDurationDays = 30;
+    }
+
+    if (activeBoosts >= boostLimit) {
+      alert(`You have reached your active boost limit (${boostLimit}) for ${user.proTier} tier.`);
       return;
     }
 
     try {
       const postRef = doc(db, 'posts', postId);
       const boostUntil = new Date();
-      boostUntil.setHours(boostUntil.getHours() + boostData.hours);
+      boostUntil.setDate(boostUntil.getDate() + boostDurationDays);
 
       await updateDoc(postRef, {
         isBoosted: true,
         boostUntil: boostUntil,
-        boostAmount: boostData.amount
+        boostAmount: 0 // Free boost for Pro members
       });
 
-      // Deduct from wallet
+      setIsBoosting(null);
+      alert(`Post boosted successfully for ${boostDurationDays} days!`);
+    } catch (error) {
+      console.error("Error boosting post:", error);
+    }
+  };
+
+  const handleSponsor = async (postId: string) => {
+    if (!user) return;
+    const sponsorCost = 1.00;
+
+    if ((user.walletBalance || 0) < sponsorCost) {
+      alert("Insufficient wallet balance to sponsor this post! Cost: $1.00");
+      return;
+    }
+
+    try {
+      const postRef = doc(db, 'posts', postId);
       const userRef = doc(db, 'users', user.uid);
+
+      await updateDoc(postRef, {
+        isSponsored: true,
+        sponsoredAt: serverTimestamp()
+      });
+
       await updateDoc(userRef, {
-        walletBalance: (user.walletBalance || 0) - boostData.amount
+        walletBalance: (user.walletBalance || 0) - sponsorCost
       });
 
       // Create payment record
       await addDoc(collection(db, 'payments'), {
         userId: user.uid,
-        amount: boostData.amount,
-        type: 'boost_post',
+        amount: sponsorCost,
+        type: 'sponsor_post',
         status: 'approved',
         method: 'wallet',
         createdAt: serverTimestamp()
       });
 
-      setIsBoosting(null);
-      alert("Post boosted successfully!");
+      alert("Post sponsored successfully! $1.00 deducted from your wallet.");
     } catch (error) {
-      console.error("Error boosting post:", error);
+      console.error("Error sponsoring post:", error);
     }
   };
 
@@ -419,10 +467,25 @@ const FeedPage: React.FC = () => {
                           Boost
                         </button>
                       )}
+                      {post.userId === user?.uid && !post.isSponsored && (
+                        <button 
+                          onClick={() => handleSponsor(post.id)}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all hover:bg-blue-50 text-blue-600"
+                        >
+                          <DollarSign className="w-5 h-5" />
+                          Sponsor ($1)
+                        </button>
+                      )}
                       {post.isBoosted && (
                         <div className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold bg-yellow-50 text-yellow-600">
                           <TrendingUp className="w-5 h-5" />
                           Boosted
+                        </div>
+                      )}
+                      {post.isSponsored && (
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold bg-blue-50 text-blue-600">
+                          <Sparkles className="w-5 h-5" />
+                          Sponsored
                         </div>
                       )}
                     </div>
@@ -465,41 +528,29 @@ const FeedPage: React.FC = () => {
               </div>
 
               <div className="space-y-6">
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Boost Amount ($)</label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input 
-                      type="number" 
-                      value={boostData.amount}
-                      onChange={(e) => setBoostData({ ...boostData, amount: Number(e.target.value) })}
-                      className="w-full bg-slate-50 rounded-2xl py-4 pl-12 pr-4 font-black text-slate-900 border-none focus:ring-2 focus:ring-yellow-500/20"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Duration (Hours)</label>
-                  <div className="relative">
-                    <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input 
-                      type="number" 
-                      value={boostData.hours}
-                      onChange={(e) => setBoostData({ ...boostData, hours: Number(e.target.value) })}
-                      className="w-full bg-slate-50 rounded-2xl py-4 pl-12 pr-4 font-black text-slate-900 border-none focus:ring-2 focus:ring-yellow-500/20"
-                    />
-                  </div>
-                </div>
-
                 <div className="bg-slate-50 p-6 rounded-3xl">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm font-bold text-slate-500">Wallet Balance</span>
-                    <span className="text-sm font-black text-slate-900">${user?.walletBalance || 0}</span>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-bold text-slate-500">Current Tier</span>
+                    <span className="px-3 py-1 bg-pink-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest">{user?.proTier}</span>
                   </div>
-                  <div className="flex justify-between text-pink-500">
-                    <span className="text-sm font-bold">Cost</span>
-                    <span className="text-sm font-black">-${boostData.amount}</span>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-bold text-slate-500">Boost Duration</span>
+                      <span className="text-sm font-black text-slate-900">
+                        {user?.proTier === 'bronze' ? '5 Days' : user?.proTier === 'gold' ? '7 Days' : '30 Days'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-bold text-slate-500">Cost</span>
+                      <span className="text-sm font-black text-green-500">FREE (Pro Benefit)</span>
+                    </div>
                   </div>
+                </div>
+
+                <div className="p-4 bg-yellow-50 rounded-2xl border border-yellow-100">
+                  <p className="text-xs font-bold text-yellow-700 leading-relaxed">
+                    Boosting your post makes it appear at the top of the feed for everyone in your region.
+                  </p>
                 </div>
 
                 <button 
