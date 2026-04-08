@@ -171,7 +171,7 @@ const FeedPage: React.FC = () => {
                       <div>
                         <h3 className="font-black text-slate-900 leading-none">{post.displayName}</h3>
                         <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">
-                          {post.createdAt?.toDate().toLocaleDateString()}
+                          {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString() : 'Just now'}
                         </p>
                       </div>
                     </div>

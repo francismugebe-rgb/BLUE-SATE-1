@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Heart, Sparkles, ArrowRight, Shield, Zap, Users, LogOut, MessageCircle, User, Play } from 'lucide-react';
 import { motion } from 'framer-motion';
-import LoginPage from './pages/Auth/LoginPage';
-import SignUpPage from './pages/Auth/SignUpPage';
-import AdminDashboard from './pages/Admin/AdminDashboard';
-import ProfilePage from './pages/User/ProfilePage';
-import FeedPage from './pages/Social/FeedPage';
-import ReelsPage from './pages/Social/ReelsPage';
-import DatingPage from './pages/Dating/DatingPage';
-import ChatPage from './pages/Social/ChatPage';
+
+// Lazy load pages
+const LoginPage = lazy(() => import('./pages/Auth/LoginPage'));
+const SignUpPage = lazy(() => import('./pages/Auth/SignUpPage'));
+const AdminDashboard = lazy(() => import('./pages/Admin/AdminDashboard'));
+const ProfilePage = lazy(() => import('./pages/User/ProfilePage'));
+const FeedPage = lazy(() => import('./pages/Social/FeedPage'));
+const ReelsPage = lazy(() => import('./pages/Social/ReelsPage'));
+const DatingPage = lazy(() => import('./pages/Dating/DatingPage'));
+const ChatPage = lazy(() => import('./pages/Social/ChatPage'));
+
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; role?: 'admin' | 'user' }> = ({ children, role }) => {
@@ -39,7 +42,7 @@ const Navigation: React.FC = () => {
       {/* Desktop Top Nav */}
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 hidden md:block">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/feed" className="flex items-center gap-2">
             <div className="w-10 h-10 bg-pink-500 rounded-xl flex items-center justify-center">
               <Heart className="w-6 h-6 text-white fill-white" />
             </div>
@@ -103,6 +106,12 @@ const Navigation: React.FC = () => {
 const LandingPage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (user) {
+      navigate('/feed', { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleJoinClick = () => {
     if (user) {
@@ -498,59 +507,65 @@ const AuthConsumer: React.FC = () => {
   return (
     <Router>
       <Navigation />
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignUpPage />} />
-        <Route 
-          path="/feed" 
-          element={
-            <ProtectedRoute>
-              <FeedPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/reels" 
-          element={
-            <ProtectedRoute>
-              <ReelsPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/dating" 
-          element={
-            <ProtectedRoute>
-              <DatingPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/chat" 
-          element={
-            <ProtectedRoute>
-              <ChatPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/profile" 
-          element={
-            <ProtectedRoute>
-              <ProfilePage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/admin" 
-          element={
-            <ProtectedRoute role="admin">
-              <AdminDashboard />
-            </ProtectedRoute>
-          } 
-        />
-      </Routes>
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-white">
+          <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      }>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+          <Route 
+            path="/feed" 
+            element={
+              <ProtectedRoute>
+                <FeedPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/reels" 
+            element={
+              <ProtectedRoute>
+                <ReelsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/dating" 
+            element={
+              <ProtectedRoute>
+                <DatingPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/chat" 
+            element={
+              <ProtectedRoute>
+                <ChatPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute role="admin">
+                <AdminDashboard />
+              </ProtectedRoute>
+            } 
+          />
+        </Routes>
+      </Suspense>
     </Router>
   );
 };

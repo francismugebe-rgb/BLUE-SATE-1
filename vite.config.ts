@@ -16,6 +16,18 @@ export default defineConfig(({mode}) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+            'vendor-ui': ['framer-motion', 'lucide-react'],
+          },
+        },
+      },
+    },
     server: {
       allowedHosts: ['heart.styni.com'],
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
