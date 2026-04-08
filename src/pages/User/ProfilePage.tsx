@@ -41,22 +41,18 @@ export default function ProfilePage() {
       setTargetUser(user);
       setLoading(false);
     } else {
-      const fetchTargetUser = async () => {
-        try {
-          const docRef = doc(db, 'users', userId!);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setTargetUser({ uid: docSnap.id, ...docSnap.data() });
-          } else {
-            setMessage({ type: 'error', text: 'User not found' });
-          }
-        } catch (error) {
-          console.error("Error fetching user:", error);
-        } finally {
-          setLoading(false);
+      const unsubscribe = onSnapshot(doc(db, 'users', userId!), (doc) => {
+        if (doc.exists()) {
+          setTargetUser({ uid: doc.id, ...doc.data() });
+        } else {
+          setMessage({ type: 'error', text: 'User not found' });
         }
-      };
-      fetchTargetUser();
+        setLoading(false);
+      }, (error) => {
+        console.error("Error fetching user:", error);
+        setLoading(false);
+      });
+      return () => unsubscribe();
     }
   }, [userId, user, isOwnProfile]);
 

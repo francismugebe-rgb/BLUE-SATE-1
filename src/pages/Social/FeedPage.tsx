@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles, Camera } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles, Camera, Zap, TrendingUp, Clock, DollarSign, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import LoadingScreen from '../../components/LoadingScreen';
 import imageCompression from 'browser-image-compression';
@@ -21,6 +21,9 @@ interface Post {
   displayName?: string;
   photoURL?: string;
   isVerified?: boolean;
+  isBoosted?: boolean;
+  boostUntil?: any;
+  boostAmount?: number;
 }
 
 interface Comment {
@@ -41,6 +44,8 @@ const FeedPage: React.FC = () => {
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeComments, setActiveComments] = useState<string | null>(null);
+  const [isBoosting, setIsBoosting] = useState<string | null>(null);
+  const [boostData, setBoostData] = useState({ amount: 5, hours: 24 });
   const [sortBy, setSortBy] = useState<'recent' | 'popular'>('recent');
   const [loading, setLoading] = useState(true);
 
@@ -56,7 +61,15 @@ const FeedPage: React.FC = () => {
           ...doc.data()
         }))
         .filter((post: any) => (post.text?.trim() || post.mediaUrl) && post.displayName) as Post[];
-      setPosts(postsData);
+      
+      // Sort boosted posts to the top
+      const sortedPosts = [...postsData].sort((a: any, b: any) => {
+        if (a.isBoosted && !b.isBoosted) return -1;
+        if (!a.isBoosted && b.isBoosted) return 1;
+        return 0;
+      });
+
+      setPosts(sortedPosts);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -106,9 +119,65 @@ const FeedPage: React.FC = () => {
       
       if (!isLiked) {
         await awardPoints(2); // Award points for liking
+        
+        // Add notification
+        const post = posts.find(p => p.id === postId);
+        if (post && post.userId !== user.uid) {
+          await addDoc(collection(db, 'notifications'), {
+            userId: post.userId,
+            type: 'like',
+            fromId: user.uid,
+            fromName: user.displayName || user.email,
+            text: `${user.displayName || user.email} liked your post.`,
+            link: `/profile/${post.userId}`,
+            read: false,
+            createdAt: serverTimestamp()
+          });
+        }
       }
     } catch (error) {
       console.error("Error liking post:", error);
+    }
+  };
+
+  const handleBoost = async (postId: string) => {
+    if (!user) return;
+    if ((user.walletBalance || 0) < boostData.amount) {
+      alert("Insufficient wallet balance!");
+      return;
+    }
+
+    try {
+      const postRef = doc(db, 'posts', postId);
+      const boostUntil = new Date();
+      boostUntil.setHours(boostUntil.getHours() + boostData.hours);
+
+      await updateDoc(postRef, {
+        isBoosted: true,
+        boostUntil: boostUntil,
+        boostAmount: boostData.amount
+      });
+
+      // Deduct from wallet
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        walletBalance: (user.walletBalance || 0) - boostData.amount
+      });
+
+      // Create payment record
+      await addDoc(collection(db, 'payments'), {
+        userId: user.uid,
+        amount: boostData.amount,
+        type: 'boost_post',
+        status: 'approved',
+        method: 'wallet',
+        createdAt: serverTimestamp()
+      });
+
+      setIsBoosting(null);
+      alert("Post boosted successfully!");
+    } catch (error) {
+      console.error("Error boosting post:", error);
     }
   };
 
@@ -335,6 +404,21 @@ const FeedPage: React.FC = () => {
                         <MessageCircle className="w-5 h-5" />
                         Comment
                       </button>
+                      {post.userId === user?.uid && !post.isBoosted && (
+                        <button 
+                          onClick={() => setIsBoosting(post.id)}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all hover:bg-yellow-50 text-yellow-600"
+                        >
+                          <Zap className="w-5 h-5" />
+                          Boost
+                        </button>
+                      )}
+                      {post.isBoosted && (
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold bg-yellow-50 text-yellow-600">
+                          <TrendingUp className="w-5 h-5" />
+                          Boosted
+                        </div>
+                      )}
                     </div>
                     <button className="flex items-center gap-2 px-4 py-2 hover:bg-slate-50 rounded-xl text-slate-600 font-bold transition-colors">
                       <Share2 className="w-5 h-5" />
@@ -352,6 +436,77 @@ const FeedPage: React.FC = () => {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Boost Modal */}
+      {isBoosting && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl"
+          >
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-yellow-100 rounded-2xl flex items-center justify-center">
+                    <Zap className="w-6 h-6 text-yellow-600" />
+                  </div>
+                  <h2 className="text-2xl font-black text-slate-900">Boost Post</h2>
+                </div>
+                <button onClick={() => setIsBoosting(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X className="w-6 h-6 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Boost Amount ($)</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input 
+                      type="number" 
+                      value={boostData.amount}
+                      onChange={(e) => setBoostData({ ...boostData, amount: Number(e.target.value) })}
+                      className="w-full bg-slate-50 rounded-2xl py-4 pl-12 pr-4 font-black text-slate-900 border-none focus:ring-2 focus:ring-yellow-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Duration (Hours)</label>
+                  <div className="relative">
+                    <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input 
+                      type="number" 
+                      value={boostData.hours}
+                      onChange={(e) => setBoostData({ ...boostData, hours: Number(e.target.value) })}
+                      className="w-full bg-slate-50 rounded-2xl py-4 pl-12 pr-4 font-black text-slate-900 border-none focus:ring-2 focus:ring-yellow-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-6 rounded-3xl">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm font-bold text-slate-500">Wallet Balance</span>
+                    <span className="text-sm font-black text-slate-900">${user?.walletBalance || 0}</span>
+                  </div>
+                  <div className="flex justify-between text-pink-500">
+                    <span className="text-sm font-bold">Cost</span>
+                    <span className="text-sm font-black">-${boostData.amount}</span>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => handleBoost(isBoosting)}
+                  className="w-full bg-yellow-500 text-white py-4 rounded-2xl font-black hover:bg-yellow-600 transition-all shadow-xl shadow-yellow-500/20"
+                >
+                  Confirm Boost
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

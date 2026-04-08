@@ -8,7 +8,7 @@ import {
   signInWithPopup,
   GoogleAuthProvider
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, getDocFromServer } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, getDocFromServer, onSnapshot } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
 import LoadingScreen from '../components/LoadingScreen';
 
@@ -127,43 +127,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsubscribeProfile: (() => void) | undefined;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
-          const path = `users/${firebaseUser.uid}`;
-          try {
-            const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-            if (userDoc.exists()) {
-              setUser(userDoc.data() as UserProfile);
-            } else {
-              const role = firebaseUser.email === 'FRANCISMUGEBE@gmail.com' ? 'admin' : 'user';
-              const newProfile: UserProfile = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || '',
-                displayName: firebaseUser.displayName || '',
-                photoURL: firebaseUser.photoURL || '',
-                role: role
-              };
-              await setDoc(doc(db, 'users', firebaseUser.uid), {
-                ...newProfile,
-                createdAt: serverTimestamp()
-              });
-              setUser(newProfile);
-            }
-          } catch (error) {
-            handleFirestoreError(error, OperationType.GET, path);
+          const userRef = doc(db, 'users', firebaseUser.uid);
+          
+          // Initial check/create
+          const userDoc = await getDoc(userRef);
+          if (!userDoc.exists()) {
+            const role = firebaseUser.email === 'FRANCISMUGEBE@gmail.com' ? 'admin' : 'user';
+            const newProfile: UserProfile = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              displayName: firebaseUser.displayName || '',
+              photoURL: firebaseUser.photoURL || '',
+              role: role,
+              createdAt: serverTimestamp()
+            };
+            await setDoc(userRef, newProfile);
           }
+
+          // Real-time listener
+          unsubscribeProfile = onSnapshot(userRef, (doc) => {
+            if (doc.exists()) {
+              setUser(doc.data() as UserProfile);
+              setLoading(false);
+            }
+          });
         } else {
           setUser(null);
+          setLoading(false);
+          if (unsubscribeProfile) unsubscribeProfile();
         }
       } catch (error) {
         console.error("Auth state check failed:", error);
-      } finally {
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {

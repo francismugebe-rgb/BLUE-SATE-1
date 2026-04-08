@@ -3,7 +3,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, getDocs, updateDoc, doc, onSnapshot, setDoc, orderBy, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { Users, Shield, Sparkles, Settings, Save, Search, CheckCircle, XCircle, CreditCard, Wallet, Check, X, ShieldCheck } from 'lucide-react';
+import { Users, Shield, Sparkles, Settings, Save, Search, CheckCircle, XCircle, CreditCard, Wallet, Check, X, ShieldCheck, Bell } from 'lucide-react';
 
 interface UserProfile {
   uid: string;
@@ -32,7 +32,7 @@ const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'users' | 'settings' | 'payments'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'settings' | 'payments' | 'notifications'>('users');
   const [settings, setSettings] = useState({
     pointValuePost: 10,
     pointValueLike: 2,
@@ -165,6 +165,18 @@ const AdminDashboard: React.FC = () => {
             >
               <CreditCard className="w-4 h-4" />
               Payments
+              {payments.filter(p => p.status === 'pending').length > 0 && (
+                <span className="bg-pink-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                  {payments.filter(p => p.status === 'pending').length}
+                </span>
+              )}
+            </button>
+            <button 
+              onClick={() => setActiveTab('notifications')}
+              className={`px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${activeTab === 'notifications' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <Bell className="w-4 h-4" />
+              Logs
             </button>
           </div>
         </div>
@@ -328,6 +340,34 @@ const AdminDashboard: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        ) : activeTab === 'notifications' ? (
+          <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden p-8">
+            <h3 className="text-xl font-black text-slate-900 mb-6">System Notifications</h3>
+            <div className="space-y-4">
+              {payments.filter(p => p.status === 'pending').map(p => (
+                <div key={p.id} className="flex items-center justify-between p-4 bg-yellow-50 rounded-2xl border border-yellow-100">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
+                      <CreditCard className="w-5 h-5 text-yellow-600" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900">Pending {p.type} Request</p>
+                      <p className="text-sm text-slate-500">User {p.userId.slice(0, 8)} requested ${p.amount}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setActiveTab('payments')}
+                    className="px-4 py-2 bg-yellow-500 text-white rounded-xl font-bold text-sm hover:bg-yellow-600 transition-all"
+                  >
+                    Review
+                  </button>
+                </div>
+              ))}
+              {payments.filter(p => p.status === 'pending').length === 0 && (
+                <div className="text-center py-12 text-slate-400 font-bold">No pending notifications</div>
+              )}
+            </div>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-8">
