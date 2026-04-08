@@ -4,6 +4,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles, Camera } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import LoadingScreen from '../../components/LoadingScreen';
 import imageCompression from 'browser-image-compression';
 
@@ -272,7 +273,13 @@ const FeedPage: React.FC = () => {
                       </div>
                       <div>
                         <div className="flex items-center gap-1">
-                          <h3 className="font-black text-slate-900 leading-none">{post.displayName}</h3>
+                          {post.userId === user?.uid ? (
+                            <Link to="/profile" className="hover:text-pink-500 transition-colors">
+                              <h3 className="font-black text-slate-900 leading-none">{post.displayName}</h3>
+                            </Link>
+                          ) : (
+                            <h3 className="font-black text-slate-900 leading-none">{post.displayName}</h3>
+                          )}
                           {post.isVerified && <Sparkles className="w-3 h-3 text-blue-500 fill-blue-500" />}
                         </div>
                         <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">

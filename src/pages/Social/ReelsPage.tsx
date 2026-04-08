@@ -4,6 +4,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, MessageCircle, Share2, Music2, UserPlus, MoreVertical, Play } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import LoadingScreen from '../../components/LoadingScreen';
 
 interface Reel {
@@ -157,7 +158,13 @@ const ReelsPage: React.FC = () => {
 
               {/* Bottom Info */}
               <div className="absolute bottom-10 left-4 right-16 z-10">
-                <h3 className="text-white font-black text-lg mb-2">@{reel.displayName || 'user'}</h3>
+                {reel.userId === user?.uid ? (
+                  <Link to="/profile" className="inline-block">
+                    <h3 className="text-white font-black text-lg mb-2 hover:text-pink-500 transition-colors">@{reel.displayName || 'user'}</h3>
+                  </Link>
+                ) : (
+                  <h3 className="text-white font-black text-lg mb-2">@{reel.displayName || 'user'}</h3>
+                )}
                 <p className="text-white/90 text-sm font-medium mb-4 line-clamp-2">
                   {reel.description}
                 </p>

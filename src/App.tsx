@@ -83,6 +83,22 @@ const Navigation: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
+            {user && (
+              <Link to="/profile" className="flex items-center gap-2 hover:bg-slate-50 px-3 py-1.5 rounded-xl transition-all group">
+                <div className="w-8 h-8 rounded-full bg-pink-50 overflow-hidden border border-pink-100">
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-pink-500 text-xs font-black">
+                      {user.displayName?.[0] || user.email?.[0]}
+                    </div>
+                  )}
+                </div>
+                <span className="text-sm font-black text-slate-700 group-hover:text-pink-500 transition-colors">
+                  {user.displayName || user.email.split('@')[0]}
+                </span>
+              </Link>
+            )}
             {user.role === 'admin' && (
               <Link to="/admin" className="text-sm font-bold text-pink-500 hover:text-pink-600 transition-colors">
                 Admin

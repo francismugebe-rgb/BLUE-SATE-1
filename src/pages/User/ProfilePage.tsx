@@ -17,6 +17,7 @@ export default function ProfilePage() {
   const { user, updateProfile } = useAuth();
   const location = useLocation();
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState<'photo' | 'cover' | null>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -91,6 +92,7 @@ export default function ProfilePage() {
         phoneNumber: formData.phoneNumber
       });
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      setIsEditing(false);
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Failed to update profile' });
     } finally {
@@ -125,12 +127,12 @@ export default function ProfilePage() {
       }
 
       // 2. Upload to server
-      const formData = new FormData();
-      formData.append('file', fileToUpload);
+      const uploadData = new FormData();
+      uploadData.append('file', fileToUpload);
 
       const response = await fetch('/api/upload', {
         method: 'POST',
-        body: formData
+        body: uploadData
       });
 
       if (!response.ok) throw new Error('Upload failed');
@@ -184,7 +186,21 @@ export default function ProfilePage() {
               <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500" />
               <span className="text-sm font-black text-slate-900">{user?.points || 0} Points</span>
             </div>
-            <h1 className="text-3xl font-black text-slate-900">Your Profile</h1>
+            {!isEditing ? (
+              <button 
+                onClick={() => setIsEditing(true)}
+                className="bg-pink-500 text-white px-6 py-2 rounded-xl font-bold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20"
+              >
+                Edit Profile
+              </button>
+            ) : (
+              <button 
+                onClick={() => setIsEditing(false)}
+                className="bg-slate-100 text-slate-600 px-6 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </div>
 
@@ -214,21 +230,23 @@ export default function ProfilePage() {
                     <ImageIcon className="w-12 h-12" />
                   </div>
                 )}
-                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <button
-                    type="button"
-                    onClick={() => coverInputRef.current?.click()}
-                    disabled={!!isUploading}
-                    className="bg-white/90 hover:bg-white text-slate-900 px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition-all"
-                  >
-                    {isUploading === 'cover' ? (
-                      <div className="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Camera className="w-4 h-4" />
-                    )}
-                    Change Cover
-                  </button>
-                </div>
+                {isEditing && (
+                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      disabled={!!isUploading}
+                      className="bg-white/90 hover:bg-white text-slate-900 px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition-all"
+                    >
+                      {isUploading === 'cover' ? (
+                        <div className="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Camera className="w-4 h-4" />
+                      )}
+                      Change Cover
+                    </button>
+                  </div>
+                )}
                 <input 
                   type="file" 
                   ref={coverInputRef} 
@@ -248,20 +266,22 @@ export default function ProfilePage() {
                       <User className="w-16 h-16 text-pink-300" />
                     )}
                     
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button
-                        type="button"
-                        onClick={() => profileInputRef.current?.click()}
-                        disabled={!!isUploading}
-                        className="text-white p-3 rounded-full hover:bg-white/20 transition-all"
-                      >
-                        {isUploading === 'photo' ? (
-                          <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Camera className="w-6 h-6" />
-                        )}
-                      </button>
-                    </div>
+                    {isEditing && (
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={() => profileInputRef.current?.click()}
+                          disabled={!!isUploading}
+                          className="text-white p-3 rounded-full hover:bg-white/20 transition-all"
+                        >
+                          {isUploading === 'photo' ? (
+                            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Camera className="w-6 h-6" />
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <input 
                     type="file" 
@@ -289,10 +309,11 @@ export default function ProfilePage() {
                   </div>
                   <p className="text-slate-500 font-medium">{user?.email}</p>
                   <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-3">
-                    <label className="flex items-center gap-2 px-4 py-2 bg-pink-50 text-pink-600 rounded-xl cursor-pointer hover:bg-pink-100 transition-all">
+                    <label className={`flex items-center gap-2 px-4 py-2 bg-pink-50 text-pink-600 rounded-xl transition-all ${isEditing ? 'cursor-pointer hover:bg-pink-100' : 'opacity-70'}`}>
                       <input 
                         type="checkbox" 
                         className="hidden" 
+                        disabled={!isEditing}
                         checked={formData.isDatingActive}
                         onChange={(e) => setFormData({...formData, isDatingActive: e.target.checked})}
                       />
@@ -310,9 +331,10 @@ export default function ProfilePage() {
                   <input 
                     type="text"
                     required
+                    disabled={!isEditing}
                     value={formData.firstName}
                     onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium"
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium disabled:opacity-70"
                     placeholder="First Name"
                   />
                 </div>
@@ -322,9 +344,10 @@ export default function ProfilePage() {
                   <input 
                     type="text"
                     required
+                    disabled={!isEditing}
                     value={formData.lastName}
                     onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium"
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium disabled:opacity-70"
                     placeholder="Surname"
                   />
                 </div>
@@ -333,8 +356,9 @@ export default function ProfilePage() {
                   <label className="text-sm font-bold text-slate-700 ml-1">Country</label>
                   <select 
                     value={formData.country}
+                    disabled={!isEditing}
                     onChange={(e) => setFormData({...formData, country: e.target.value, city: ''})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium appearance-none"
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium appearance-none disabled:opacity-70"
                   >
                     <option value="">Select Country</option>
                     {Object.keys(COUNTRIES_CITIES).map(country => (
@@ -347,7 +371,7 @@ export default function ProfilePage() {
                   <label className="text-sm font-bold text-slate-700 ml-1">City</label>
                   <select 
                     value={formData.city}
-                    disabled={!formData.country}
+                    disabled={!formData.country || !isEditing}
                     onChange={(e) => setFormData({...formData, city: e.target.value})}
                     className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium appearance-none disabled:opacity-50"
                   >
@@ -362,9 +386,10 @@ export default function ProfilePage() {
                   <label className="text-sm font-bold text-slate-700 ml-1">WhatsApp Number</label>
                   <input 
                     type="text"
+                    disabled={!isEditing}
                     value={formData.phoneNumber}
                     onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium"
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium disabled:opacity-70"
                     placeholder="+263..."
                   />
                 </div>
@@ -375,9 +400,10 @@ export default function ProfilePage() {
                     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     <input 
                       type="number"
+                      disabled={!isEditing}
                       value={formData.age}
                       onChange={(e) => setFormData({...formData, age: Number(e.target.value)})}
-                      className="w-full pl-12 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium"
+                      className="w-full pl-12 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium disabled:opacity-70"
                       min="18"
                       max="100"
                     />
@@ -388,8 +414,9 @@ export default function ProfilePage() {
                   <label className="text-sm font-bold text-slate-700 ml-1">Gender</label>
                   <select 
                     value={formData.gender}
+                    disabled={!isEditing}
                     onChange={(e) => setFormData({...formData, gender: e.target.value})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium appearance-none"
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium appearance-none disabled:opacity-70"
                   >
                     <option value="">Select Gender</option>
                     <option value="male">Male</option>
@@ -403,8 +430,9 @@ export default function ProfilePage() {
                   <label className="text-sm font-bold text-slate-700 ml-1">Interested In</label>
                   <select 
                     value={formData.lookingFor}
+                    disabled={!isEditing}
                     onChange={(e) => setFormData({...formData, lookingFor: e.target.value})}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium appearance-none"
+                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium appearance-none disabled:opacity-70"
                   >
                     <option value="">Select Preference</option>
                     <option value="male">Men</option>
@@ -418,9 +446,10 @@ export default function ProfilePage() {
                 <label className="text-sm font-bold text-slate-700 ml-1">Bio</label>
                 <textarea 
                   value={formData.bio}
+                  disabled={!isEditing}
                   onChange={(e) => setFormData({...formData, bio: e.target.value})}
                   rows={4}
-                  className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium resize-none"
+                  className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium resize-none disabled:opacity-70"
                   placeholder="Tell us about yourself..."
                 />
               </div>
@@ -429,9 +458,10 @@ export default function ProfilePage() {
                 <label className="text-sm font-bold text-slate-700 ml-1">Interests (comma separated)</label>
                 <input 
                   type="text"
+                  disabled={!isEditing}
                   value={formData.interests}
                   onChange={(e) => setFormData({...formData, interests: e.target.value})}
-                  className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium"
+                  className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium disabled:opacity-70"
                   placeholder="Hiking, Cooking, Travel..."
                 />
               </div>
@@ -453,8 +483,9 @@ export default function ProfilePage() {
                       <button
                         key={plan.tier}
                         type="button"
+                        disabled={!isEditing}
                         onClick={() => updateProfile({ proTier: plan.tier as any })}
-                        className={`p-6 rounded-3xl border border-white/10 hover:border-white/30 transition-all text-center group ${user?.proTier === plan.tier ? 'ring-2 ring-pink-500 bg-white/5' : ''}`}
+                        className={`p-6 rounded-3xl border border-white/10 hover:border-white/30 transition-all text-center group ${user?.proTier === plan.tier ? 'ring-2 ring-pink-500 bg-white/5' : ''} disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         <div className={`w-10 h-10 ${plan.color} rounded-xl mx-auto mb-4 flex items-center justify-center font-black text-xs uppercase`}>
                           {plan.tier[0]}
@@ -470,22 +501,24 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="pt-4">
-                <button 
-                  type="submit"
-                  disabled={isSaving}
-                  className="w-full bg-pink-500 hover:bg-pink-600 disabled:bg-pink-300 text-white font-bold py-4 rounded-2xl shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                >
-                  {isSaving ? (
-                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <Save className="w-5 h-5" />
-                      Save Profile Changes
-                    </>
-                  )}
-                </button>
-              </div>
+              {isEditing && (
+                <div className="pt-4">
+                  <button 
+                    type="submit"
+                    disabled={isSaving}
+                    className="w-full bg-pink-500 hover:bg-pink-600 disabled:bg-pink-300 text-white font-bold py-4 rounded-2xl shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                  >
+                    {isSaving ? (
+                      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <>
+                        <Save className="w-5 h-5" />
+                        Save Profile Changes
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </motion.div>
