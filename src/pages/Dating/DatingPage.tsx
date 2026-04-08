@@ -5,6 +5,7 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { Heart, X, MapPin, Info, Sparkles, MessageCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import LoadingScreen from '../../components/LoadingScreen';
 
 interface DatingProfile {
   uid: string;
@@ -94,6 +95,8 @@ const DatingPage: React.FC = () => {
       alert("This user hasn't provided a WhatsApp number yet.");
     }
   };
+
+  if (loading) return <LoadingScreen />;
 
   if (!user?.isDatingActive || !user?.age || !user?.gender || !user?.location) {
     return (

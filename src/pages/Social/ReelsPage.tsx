@@ -4,6 +4,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, MessageCircle, Share2, Music2, UserPlus, MoreVertical, Play } from 'lucide-react';
+import LoadingScreen from '../../components/LoadingScreen';
 
 interface Reel {
   id: string;
@@ -23,6 +24,7 @@ const ReelsPage: React.FC = () => {
   const [reels, setReels] = useState<Reel[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,6 +35,7 @@ const ReelsPage: React.FC = () => {
         ...doc.data()
       })) as Reel[];
       setReels(reelsData);
+      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -71,6 +74,8 @@ const ReelsPage: React.FC = () => {
       setIsUploading(false);
     }
   };
+
+  if (loading) return <LoadingScreen />;
 
   return (
     <div className="h-screen bg-black overflow-hidden relative">

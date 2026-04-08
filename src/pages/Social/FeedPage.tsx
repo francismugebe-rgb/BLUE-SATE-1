@@ -4,6 +4,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles } from 'lucide-react';
+import LoadingScreen from '../../components/LoadingScreen';
 
 interface Post {
   id: string;
@@ -38,6 +39,7 @@ const FeedPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeComments, setActiveComments] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'recent' | 'popular'>('recent');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const q = query(
@@ -52,6 +54,7 @@ const FeedPage: React.FC = () => {
         }))
         .filter((post: any) => (post.text?.trim() || post.mediaUrl) && post.displayName) as Post[];
       setPosts(postsData);
+      setLoading(false);
     });
     return () => unsubscribe();
   }, [sortBy]);
@@ -116,6 +119,8 @@ const FeedPage: React.FC = () => {
       setMediaType(type);
     }
   };
+
+  if (loading) return <LoadingScreen />;
 
   return (
     <div className="min-h-screen bg-slate-50 pt-24 pb-12 px-4">

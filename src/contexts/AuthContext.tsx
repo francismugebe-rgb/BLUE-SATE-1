@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, getDocFromServer } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
+import LoadingScreen from '../components/LoadingScreen';
 
 enum OperationType {
   CREATE = 'create',
@@ -228,7 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout, updateProfile, awardPoints }}>
-      {!loading && children}
+      {loading ? <LoadingScreen /> : children}
     </AuthContext.Provider>
   );
 };
