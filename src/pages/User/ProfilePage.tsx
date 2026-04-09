@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet, X } from 'lucide-react';
+import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet, X, Plus, Coins, RefreshCw } from 'lucide-react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDocs, or, and } from 'firebase/firestore';
@@ -353,6 +353,27 @@ export default function ProfilePage() {
     }
   };
 
+  const handleConvertPoints = async () => {
+    if (!user || (user.points || 0) < 100) {
+      setMessage({ type: 'error', text: 'Minimum 100 points required to convert.' });
+      return;
+    }
+
+    const pointsToConvert = Math.floor((user.points || 0) / 100) * 100;
+    const cashValue = pointsToConvert / 100;
+
+    try {
+      await updateProfile({
+        points: (user.points || 0) - pointsToConvert,
+        walletBalance: (user.walletBalance || 0) + cashValue
+      });
+      setMessage({ type: 'success', text: `Converted ${pointsToConvert} points to $${cashValue}!` });
+    } catch (error) {
+      console.error("Error converting points:", error);
+      setMessage({ type: 'error', text: 'Failed to convert points.' });
+    }
+  };
+
   const handleRequestUpgrade = async () => {
     if (!user) return;
     try {
@@ -397,26 +418,6 @@ export default function ProfilePage() {
             Back to Home
           </Link>
           <div className="flex items-center gap-4">
-            {isOwnProfile && (
-              <div className="flex items-center gap-4">
-                <div className="bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Wallet</span>
-                    <span className="text-sm font-black text-slate-900">${user?.walletBalance || 0}</span>
-                  </div>
-                  <button 
-                    onClick={() => setIsDepositModalOpen(true)}
-                    className="p-2 bg-pink-50 text-pink-500 rounded-xl hover:bg-pink-100 transition-all"
-                  >
-                    <Wallet className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                  <span className="text-sm font-black text-slate-900">{user?.points || 0} Points</span>
-                </div>
-              </div>
-            )}
             {isOwnProfile ? (
               !isEditing ? (
                 <button 
@@ -526,6 +527,40 @@ export default function ProfilePage() {
                   {targetUser?.isVerified && (
                     <div className="absolute bottom-2 right-2 w-10 h-10 bg-blue-500 rounded-xl shadow-md border-4 border-white flex items-center justify-center text-white">
                       <Sparkles className="w-5 h-5 fill-white" />
+                    </div>
+                  )}
+                  
+                  {isOwnProfile && (
+                    <div className="mt-4 flex flex-col gap-3 w-full">
+                      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Wallet</span>
+                            <span className="text-lg font-black text-slate-900">${user?.walletBalance || 0}</span>
+                          </div>
+                          <button 
+                            onClick={() => setIsDepositModalOpen(true)}
+                            className="p-2 bg-pink-50 text-pink-500 rounded-xl hover:bg-pink-100 transition-all shadow-sm"
+                            title="Deposit"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Points</span>
+                            <span className="text-sm font-black text-slate-900">{user?.points || 0}</span>
+                          </div>
+                          <button 
+                            onClick={handleConvertPoints}
+                            disabled={(user?.points || 0) < 100}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all disabled:opacity-50"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Convert
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
