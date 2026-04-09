@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, MessageCircle, Share2, Music2, UserPlus, MoreVertical, Play } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music2, UserPlus, MoreVertical, Play, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import LoadingScreen from '../../components/LoadingScreen';
 
@@ -186,8 +186,9 @@ const ReelsPage: React.FC = () => {
           <button className="text-white/60 font-black text-lg hover:text-white transition-colors">Following</button>
           <button className="text-white font-black text-lg border-b-2 border-white pb-1">For You</button>
         </div>
-        <label className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white cursor-pointer hover:bg-white/20 transition-all">
-          <Play className="w-5 h-5 fill-white" />
+        <label className="flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded-full font-bold cursor-pointer hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20">
+          <Plus className="w-5 h-5" />
+          <span>Upload Reel</span>
           <input type="file" accept="video/*" className="hidden" onChange={handleUploadReel} disabled={isUploading} />
         </label>
       </div>

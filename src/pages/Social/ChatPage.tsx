@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { ActionService } from '../../services/ActionService';
 import { Send, Image as ImageIcon, MoreVertical, Phone, Video, Search, ArrowLeft, Check, CheckCheck, MessageCircle } from 'lucide-react';
@@ -24,7 +24,7 @@ interface Message {
   text: string;
   mediaUrl?: string;
   createdAt: any;
-  seen: boolean;
+  status: 'sent' | 'delivered' | 'read';
 }
 
 const ChatPage: React.FC = () => {
@@ -54,10 +54,18 @@ const ChatPage: React.FC = () => {
       const convsWithData = await Promise.all(convs.map(async (conv) => {
         const otherUserId = conv.participants.find(id => id !== user.uid);
         if (otherUserId) {
-          // In a real app, you'd cache this or use a separate users collection listener
-          // For simplicity, we'll just fetch it once here
-          // (Better: use onSnapshot for each user or a combined query)
-          return conv; 
+          const userDoc = await getDoc(doc(db, 'users', otherUserId));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            return {
+              ...conv,
+              otherUser: {
+                uid: otherUserId,
+                displayName: userData.displayName || userData.email?.split('@')[0] || 'User',
+                photoURL: userData.photoURL || `https://picsum.photos/seed/${otherUserId}/100/100`
+              }
+            };
+          }
         }
         return conv;
       }));
@@ -69,7 +77,10 @@ const ChatPage: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    if (!activeConv) return;
+    if (!activeConv || !user) return;
+
+    // Mark messages as read when opening conversation
+    ActionService.markMessagesAsRead(activeConv.id);
 
     const q = query(
       collection(db, `conversations/${activeConv.id}/messages`),
@@ -86,7 +97,7 @@ const ChatPage: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, [activeConv]);
+  }, [activeConv, user]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -110,7 +121,7 @@ const ChatPage: React.FC = () => {
   };
 
   return (
-    <div className="h-screen bg-slate-50 pt-20 flex overflow-hidden">
+    <div className="h-[calc(100vh-64px)] md:h-screen bg-slate-50 pt-16 md:pt-20 flex overflow-hidden pb-16 md:pb-0">
       {/* Sidebar */}
       <div className={`w-full md:w-96 bg-white border-r border-slate-100 flex flex-col ${activeConv ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-6 border-b border-slate-50">
@@ -133,12 +144,14 @@ const ChatPage: React.FC = () => {
               className={`w-full p-6 flex items-center gap-4 hover:bg-slate-50 transition-colors border-b border-slate-50 ${activeConv?.id === conv.id ? 'bg-pink-50/50' : ''}`}
             >
               <div className="w-14 h-14 rounded-full bg-slate-100 overflow-hidden flex-shrink-0">
-                <img src={`https://picsum.photos/seed/${conv.id}/100/100`} alt="" className="w-full h-full object-cover" />
+                <img src={conv.otherUser?.photoURL || `https://picsum.photos/seed/${conv.id}/100/100`} alt="" className="w-full h-full object-cover" />
               </div>
               <div className="flex-1 text-left">
                 <div className="flex justify-between items-center mb-1">
-                  <h3 className="font-bold text-slate-900">User {conv.participants.find(id => id !== user?.uid)?.slice(0, 5)}</h3>
-                  <span className="text-xs font-bold text-slate-400">12:45 PM</span>
+                  <h3 className="font-bold text-slate-900">{conv.otherUser?.displayName || 'User'}</h3>
+                  <span className="text-xs font-bold text-slate-400">
+                    {conv.updatedAt?.toDate ? conv.updatedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </span>
                 </div>
                 <p className="text-sm text-slate-500 font-medium line-clamp-1">{conv.lastMessage}</p>
               </div>
@@ -148,7 +161,7 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Chat Window */}
-      <div className={`flex-1 bg-slate-50 flex flex-col ${!activeConv ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`flex-1 bg-slate-50 flex flex-col ${!activeConv ? 'hidden md:flex' : 'flex'} relative`}>
         {activeConv ? (
           <>
             {/* Chat Header */}
@@ -158,10 +171,10 @@ const ChatPage: React.FC = () => {
                   <ArrowLeft className="w-6 h-6" />
                 </button>
                 <div className="w-12 h-12 rounded-full bg-slate-100 overflow-hidden">
-                  <img src={`https://picsum.photos/seed/${activeConv.id}/100/100`} alt="" className="w-full h-full object-cover" />
+                  <img src={activeConv.otherUser?.photoURL || `https://picsum.photos/seed/${activeConv.id}/100/100`} alt="" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900">User {activeConv.participants.find(id => id !== user?.uid)?.slice(0, 5)}</h3>
+                  <h3 className="font-bold text-slate-900">{activeConv.otherUser?.displayName || 'User'}</h3>
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full" />
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Online</span>
@@ -176,7 +189,7 @@ const ChatPage: React.FC = () => {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 pb-20 md:pb-6">
               {messages.map((msg) => {
                 const isMe = msg.senderId === user?.uid;
                 return (
@@ -189,7 +202,17 @@ const ChatPage: React.FC = () => {
                         <span className="text-[10px] font-bold">
                           {msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
                         </span>
-                        {isMe && (msg.seen ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />)}
+                        {isMe && (
+                          <div className="flex items-center">
+                            {msg.status === 'read' ? (
+                              <CheckCheck className="w-3 h-3 text-green-300" />
+                            ) : msg.status === 'delivered' ? (
+                              <CheckCheck className="w-3 h-3" />
+                            ) : (
+                              <Check className="w-3 h-3" />
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -199,7 +222,7 @@ const ChatPage: React.FC = () => {
             </div>
 
             {/* Input */}
-            <div className="p-6 bg-white border-t border-slate-100">
+            <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 bg-white border-t border-slate-100 md:relative">
               <form onSubmit={handleSendMessage} className="flex items-center gap-4">
                 <button type="button" className="text-slate-400 hover:text-pink-500 transition-colors">
                   <ImageIcon className="w-6 h-6" />

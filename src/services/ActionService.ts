@@ -34,6 +34,9 @@ export type ActionName =
   | 'LIKE_POST'
   | 'UPLOAD_REEL'
   | 'CREATE_NOTIFICATION'
+  | 'CREATE_AD'
+  | 'APPROVE_AD'
+  | 'DELETE_AD'
   | 'BAN_USER';
 
 export interface ActionResponse {
@@ -400,7 +403,7 @@ export class ActionService {
       const messageData = {
         senderId: userId,
         text,
-        read: false,
+        status: 'sent', // 'sent', 'delivered', 'read'
         createdAt: serverTimestamp()
       };
 
@@ -431,17 +434,94 @@ export class ActionService {
     });
   }
 
-  static async readMessage(messageId: string): Promise<ActionResponse> {
-    return this.execute('READ_MESSAGE', { messageId }, async (params, userId) => {
-      const { messageId } = params;
-      const msgRef = doc(db, 'messages', messageId);
-      const msgDoc = await getDoc(msgRef);
-
-      if (!msgDoc.exists()) throw new Error('Message exists');
-      // In a real app, check if userId is the receiver
+  static async markMessagesAsRead(conversationId: string): Promise<ActionResponse> {
+    return this.execute('READ_MESSAGE', { conversationId }, async (params, userId) => {
+      const { conversationId } = params;
+      const q = query(
+        collection(db, `conversations/${conversationId}/messages`),
+        where('senderId', '!=', userId),
+        where('status', '!=', 'read')
+      );
       
-      await updateDoc(msgRef, { read: true });
-      return { read: true };
+      const snapshot = await getDocs(q);
+      const batch = snapshot.docs.map(d => updateDoc(d.ref, { status: 'read' }));
+      await Promise.all(batch);
+
+      return { readCount: snapshot.size };
+    });
+  }
+
+  // --- ADVERTISING ACTION COMMANDS ---
+
+  static async createAd(data: { title: string, content: string, imageUrl: string, placement: 'feed' | 'sidebar', price: number, duration: number }): Promise<ActionResponse> {
+    return this.execute('CREATE_AD', data, async (params, userId) => {
+      const { title, content, imageUrl, placement, price, duration } = params;
+      
+      // Check balance
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      const balance = userDoc.data()?.walletBalance || 0;
+      if (balance < price) throw new Error('Insufficient funds');
+
+      const adData = {
+        userId,
+        title,
+        content,
+        imageUrl,
+        placement,
+        price,
+        duration,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, 'ads'), adData);
+      
+      // Deduct funds immediately or on approval? Usually on creation for ads.
+      await updateDoc(userRef, { walletBalance: balance - price });
+
+      return { adId: docRef.id };
+    });
+  }
+
+  static async approveAd(adId: string): Promise<ActionResponse> {
+    return this.execute('APPROVE_AD', { adId }, async (params, adminId) => {
+      const { adId } = params;
+      const adminDoc = await getDoc(doc(db, 'users', adminId));
+      if (adminDoc.data()?.role !== 'admin') throw new Error('Admin rights required');
+
+      const adRef = doc(db, 'ads', adId);
+      const adDoc = await getDoc(adRef);
+      if (!adDoc.exists()) throw new Error('Ad not found');
+
+      const durationDays = adDoc.data().duration;
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + durationDays);
+
+      await updateDoc(adRef, { 
+        status: 'approved', 
+        approvedAt: serverTimestamp(),
+        expiresAt: Timestamp.fromDate(expiresAt)
+      });
+
+      return { approved: true };
+    });
+  }
+
+  static async deleteAd(adId: string): Promise<ActionResponse> {
+    return this.execute('DELETE_AD', { adId }, async (params, userId) => {
+      const { adId } = params;
+      const adRef = doc(db, 'ads', adId);
+      const adDoc = await getDoc(adRef);
+      if (!adDoc.exists()) throw new Error('Ad not found');
+
+      const adminDoc = await getDoc(doc(db, 'users', userId));
+      if (adDoc.data().userId !== userId && adminDoc.data()?.role !== 'admin') {
+        throw new Error('Unauthorized');
+      }
+
+      await deleteDoc(adRef);
+      return { deleted: true };
     });
   }
 

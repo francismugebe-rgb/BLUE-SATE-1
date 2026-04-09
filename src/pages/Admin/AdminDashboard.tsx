@@ -4,7 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { collection, query, getDocs, updateDoc, doc, onSnapshot, setDoc, orderBy, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { Users, Shield, Sparkles, Settings, Save, Search, CheckCircle, XCircle, CreditCard, Wallet, Check, X, ShieldCheck, Bell } from 'lucide-react';
+import { Users, Shield, Sparkles, Settings, Save, Search, CheckCircle, XCircle, CreditCard, Wallet, Check, X, ShieldCheck, Bell, Megaphone, Trash2 } from 'lucide-react';
+import { ActionService } from '../../services/ActionService';
 
 interface UserProfile {
   uid: string;
@@ -30,12 +31,26 @@ interface Payment {
   userEmail?: string;
 }
 
+interface Ad {
+  id: string;
+  userId: string;
+  title: string;
+  content: string;
+  imageUrl: string;
+  placement: 'feed' | 'sidebar';
+  price: number;
+  duration: number;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: any;
+}
+
 const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [ads, setAds] = useState<Ad[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'users' | 'settings' | 'payments' | 'notifications'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'settings' | 'payments' | 'notifications' | 'ads'>('users');
   const [settings, setSettings] = useState({
     pointValuePost: 10,
     pointValueLike: 2,
@@ -74,9 +89,19 @@ const AdminDashboard: React.FC = () => {
       setPayments(paymentsData);
     });
 
+    const adsQ = query(collection(db, 'ads'), orderBy('createdAt', 'desc'));
+    const unsubscribeAds = onSnapshot(adsQ, (snapshot) => {
+      const adsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Ad[];
+      setAds(adsData);
+    });
+
     return () => {
       unsubscribe();
       unsubscribePayments();
+      unsubscribeAds();
     };
   }, [user]);
 
@@ -149,6 +174,33 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleApproveAd = async (adId: string) => {
+    try {
+      const response = await ActionService.approveAd(adId);
+      if (response.status) {
+        alert("Ad approved!");
+      } else {
+        alert(response.error || "Failed to approve ad");
+      }
+    } catch (error) {
+      console.error("Error approving ad:", error);
+    }
+  };
+
+  const handleDeleteAd = async (adId: string) => {
+    if (!window.confirm("Delete this ad?")) return;
+    try {
+      const response = await ActionService.deleteAd(adId);
+      if (response.status) {
+        alert("Ad deleted!");
+      } else {
+        alert(response.error || "Failed to delete ad");
+      }
+    } catch (error) {
+      console.error("Error deleting ad:", error);
+    }
+  };
+
   const filteredUsers = users.filter(u => 
     u.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.email?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -187,6 +239,18 @@ const AdminDashboard: React.FC = () => {
               )}
             </button>
             <button 
+              onClick={() => setActiveTab('ads')}
+              className={`px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${activeTab === 'ads' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <Megaphone className="w-4 h-4" />
+              Ads
+              {ads.filter(a => a.status === 'pending').length > 0 && (
+                <span className="bg-pink-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                  {ads.filter(a => a.status === 'pending').length}
+                </span>
+              )}
+            </button>
+            <button 
               onClick={() => setActiveTab('notifications')}
               className={`px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${activeTab === 'notifications' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
             >
@@ -209,8 +273,8 @@ const AdminDashboard: React.FC = () => {
               />
             </div>
 
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-              <table className="w-full text-left">
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-x-auto">
+              <table className="w-full text-left min-w-[800px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">User</th>
@@ -288,8 +352,8 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
         ) : activeTab === 'payments' ? (
-          <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-            <table className="w-full text-left">
+          <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-x-auto">
+            <table className="w-full text-left min-w-[800px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">User</th>
@@ -350,6 +414,73 @@ const AdminDashboard: React.FC = () => {
                           </button>
                         </div>
                       )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : activeTab === 'ads' ? (
+          <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-x-auto">
+            <table className="w-full text-left min-w-[800px]">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Ad Details</th>
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Placement</th>
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Price/Duration</th>
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {ads.map((ad) => (
+                  <tr key={ad.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
+                          <img src={ad.imageUrl} alt="" className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                          <div className="font-black text-slate-900">{ad.title}</div>
+                          <div className="text-xs text-slate-400 font-bold truncate max-w-[200px]">{ad.content}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-600">
+                        {ad.placement}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="font-black text-slate-900">${ad.price}</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{ad.duration} Days</div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                        ad.status === 'approved' ? 'bg-green-50 text-green-600' :
+                        ad.status === 'rejected' ? 'bg-red-50 text-red-600' :
+                        'bg-yellow-50 text-yellow-600'
+                      }`}>
+                        {ad.status}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-2">
+                        {ad.status === 'pending' && (
+                          <button 
+                            onClick={() => handleApproveAd(ad.id)}
+                            className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all shadow-lg shadow-green-500/20"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleDeleteAd(ad.id)}
+                          className="p-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

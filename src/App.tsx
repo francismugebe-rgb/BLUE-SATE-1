@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useState, useRef, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Heart, Sparkles, ArrowRight, Shield, Zap, Users, LogOut, MessageCircle, User, Play, MapPin, Bell, ChevronDown, Settings, ShieldCheck, Wallet } from 'lucide-react';
+import { Heart, Sparkles, ArrowRight, Shield, Zap, Users, LogOut, MessageCircle, User, Play, MapPin, Bell, ChevronDown, Settings, ShieldCheck, Wallet, Megaphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Lazy load pages
@@ -12,6 +12,7 @@ const FeedPage = lazy(() => import('./pages/Social/FeedPage'));
 const ReelsPage = lazy(() => import('./pages/Social/ReelsPage'));
 const DatingPage = lazy(() => import('./pages/Dating/DatingPage'));
 const ChatPage = lazy(() => import('./pages/Social/ChatPage'));
+const AdsPage = lazy(() => import('./pages/User/AdsPage'));
 
 import { collection, query, where, orderBy, limit, onSnapshot, getDocs, updateDoc, doc, arrayUnion, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './lib/firebase';
@@ -135,6 +136,7 @@ const Navigation: React.FC = () => {
     { path: '/reels', icon: Zap, label: 'Reels' },
     { path: '/dating', icon: Heart, label: 'Dating' },
     { path: '/chat', icon: MessageCircle, label: 'Chat' },
+    { path: '/ads', icon: Megaphone, label: 'Ads' },
     { path: '/profile', icon: User, label: 'Profile' },
   ];
 
@@ -305,6 +307,15 @@ const Navigation: React.FC = () => {
                     >
                       <User className="w-4 h-4" />
                       My Profile
+                    </Link>
+
+                    <Link 
+                      to="/ads" 
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-pink-500 transition-colors"
+                    >
+                      <Megaphone className="w-4 h-4" />
+                      Advertising
                     </Link>
 
                     {user.role === 'admin' && (
@@ -748,6 +759,14 @@ const AuthConsumer: React.FC = () => {
             element={
               <ProtectedRoute>
                 <ProfilePage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/ads" 
+            element={
+              <ProtectedRoute>
+                <AdsPage />
               </ProtectedRoute>
             } 
           />

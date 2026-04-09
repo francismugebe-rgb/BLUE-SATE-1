@@ -183,6 +183,13 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /ads/{adId} {
+      allow read: if (resource.data.status == 'approved') || (isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin()));
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
     // Default deny
     match /{path=**} {
       allow read, write: if false;
