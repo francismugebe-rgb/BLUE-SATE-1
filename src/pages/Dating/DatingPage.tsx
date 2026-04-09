@@ -6,6 +6,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/re
 import { Heart, X, MapPin, Info, Sparkles, MessageCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import LoadingScreen from '../../components/LoadingScreen';
+import { ActionService } from '../../services/ActionService';
 
 interface DatingProfile {
   uid: string;
@@ -61,23 +62,9 @@ const DatingPage: React.FC = () => {
     
     if (direction === 'right') {
       try {
-        const myRef = doc(db, 'users', user.uid);
-        await updateDoc(myRef, {
-          likedUsers: arrayUnion(targetProfile.uid)
-        });
-
-        const targetRef = doc(db, 'users', targetProfile.uid);
-        const targetSnap = await getDoc(targetRef);
-        const targetData = targetSnap.data();
-        
-        if (targetData?.likedUsers?.includes(user.uid)) {
+        const response = await ActionService.likeProfile(targetProfile.uid);
+        if (response.status && response.data?.matched) {
           setMatch(targetProfile);
-          await addDoc(collection(db, 'conversations'), {
-            participants: [user.uid, targetProfile.uid],
-            lastMessage: "You matched! Say hello.",
-            updatedAt: serverTimestamp(),
-            createdAt: serverTimestamp()
-          });
         }
       } catch (error) {
         console.error("Error swiping:", error);

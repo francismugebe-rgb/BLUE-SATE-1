@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
+import { ActionService } from '../../services/ActionService';
 import { Send, Image as ImageIcon, MoreVertical, Phone, Video, Search, ArrowLeft, Check, CheckCheck, MessageCircle } from 'lucide-react';
 
 interface Conversation {
@@ -99,31 +100,9 @@ const ChatPage: React.FC = () => {
     setNewMessage('');
 
     try {
-      await addDoc(collection(db, `conversations/${activeConv.id}/messages`), {
-        senderId: user.uid,
-        text,
-        seen: false,
-        createdAt: serverTimestamp()
-      });
-
-      await updateDoc(doc(db, 'conversations', activeConv.id), {
-        lastMessage: text,
-        updatedAt: serverTimestamp()
-      });
-
-      // Send notification to other participant
-      const otherId = activeConv.participants.find(id => id !== user.uid);
-      if (otherId) {
-        await addDoc(collection(db, 'notifications'), {
-          userId: otherId,
-          type: 'new_message',
-          fromId: user.uid,
-          fromName: user.displayName || user.email,
-          text: `New message from ${user.displayName || user.email}`,
-          link: '/chat',
-          read: false,
-          createdAt: serverTimestamp()
-        });
+      const response = await ActionService.sendMessage(activeConv.id, text);
+      if (!response.status) {
+        alert(response.error || "Failed to send message");
       }
     } catch (error) {
       console.error("Error sending message:", error);

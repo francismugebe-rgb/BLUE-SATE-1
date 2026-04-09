@@ -16,6 +16,7 @@ const ChatPage = lazy(() => import('./pages/Social/ChatPage'));
 import { collection, query, where, orderBy, limit, onSnapshot, getDocs, updateDoc, doc, arrayUnion, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ActionService } from './services/ActionService';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; role?: 'admin' | 'user' }> = ({ children, role }) => {
   const { user } = useAuth();
@@ -78,7 +79,7 @@ const Navigation: React.FC = () => {
 
   const handleAcceptFriend = async (notif: any) => {
     try {
-      // Update friend request
+      // Find the friend request ID
       const q = query(
         collection(db, 'friendRequests'),
         where('fromId', '==', notif.fromId),
@@ -86,32 +87,22 @@ const Navigation: React.FC = () => {
         where('status', '==', 'pending')
       );
       const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        await updateDoc(doc(db, 'friendRequests', snapshot.docs[0].id), { status: 'accepted' });
+      
+      if (snapshot.empty) {
+        alert("Friend request not found or already processed.");
+        return;
       }
 
-      // Update both users' friends lists
-      await updateDoc(doc(db, 'users', user!.uid), {
-        friends: arrayUnion(notif.fromId)
-      });
-      await updateDoc(doc(db, 'users', notif.fromId), {
-        friends: arrayUnion(user!.uid)
-      });
+      const requestId = snapshot.docs[0].id;
+      const response = await ActionService.acceptFriendRequest(requestId);
 
-      // Mark notification as read
-      await updateDoc(doc(db, 'notifications', notif.id), { read: true });
-
-      // Send acceptance notification
-      await addDoc(collection(db, 'notifications'), {
-        userId: notif.fromId,
-        type: 'friend_accept',
-        fromId: user!.uid,
-        fromName: user!.displayName || user!.email,
-        text: `${user!.displayName || user!.email} accepted your friend request!`,
-        link: `/profile/${user!.uid}`,
-        read: false,
-        createdAt: serverTimestamp()
-      });
+      if (response.status) {
+        // Mark notification as read
+        await updateDoc(doc(db, 'notifications', notif.id), { read: true });
+        alert("Friend request accepted!");
+      } else {
+        alert(response.error || "Failed to accept request");
+      }
     } catch (error) {
       console.error("Error accepting friend:", error);
     }

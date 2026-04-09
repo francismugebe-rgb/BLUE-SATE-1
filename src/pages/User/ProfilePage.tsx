@@ -6,6 +6,7 @@ import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDocs, or, and } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
+import { ActionService } from '../../services/ActionService';
 
 const COUNTRIES_CITIES: Record<string, string[]> = {
   'Zimbabwe': ['Harare', 'Bulawayo', 'Chitungwiza', 'Mutare', 'Epworth', 'Gweru', 'Kwekwe', 'Kadoma', 'Masvingo', 'Chinhoyi'],
@@ -122,26 +123,12 @@ export default function ProfilePage() {
     }
 
     try {
-      await addDoc(collection(db, 'friendRequests'), {
-        fromId: user.uid,
-        toId: userId,
-        status: 'pending',
-        createdAt: serverTimestamp()
-      });
-
-      // Add notification
-      await addDoc(collection(db, 'notifications'), {
-        userId: userId,
-        type: 'friend_request',
-        fromId: user.uid,
-        fromName: user.displayName || user.email,
-        text: `${user.displayName || user.email} sent you a friend request.`,
-        link: `/profile/${user.uid}`,
-        read: false,
-        createdAt: serverTimestamp()
-      });
-
-      setMessage({ type: 'success', text: 'Friend request sent!' });
+      const response = await ActionService.sendFriendRequest(userId);
+      if (response.status) {
+        setMessage({ type: 'success', text: 'Friend request sent!' });
+      } else {
+        setMessage({ type: 'error', text: response.error || 'Failed to send request' });
+      }
     } catch (error) {
       console.error("Error adding friend:", error);
     }
