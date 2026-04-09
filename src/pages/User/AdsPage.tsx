@@ -38,8 +38,7 @@ const AdsPage: React.FC = () => {
   });
 
   const PRICES = {
-    feed: 50, // $50 per week
-    sidebar: 30, // $30 per week
+    perDay: 1, // $1 per day
   };
 
   useEffect(() => {
@@ -94,7 +93,7 @@ const AdsPage: React.FC = () => {
     }
 
     setIsUploading(true);
-    const price = formData.placement === 'feed' ? PRICES.feed : PRICES.sidebar;
+    const price = formData.duration * PRICES.perDay;
     
     try {
       // 1. Upload Image
@@ -334,8 +333,8 @@ const AdsPage: React.FC = () => {
                         onChange={(e) => setFormData({...formData, placement: e.target.value as 'feed' | 'sidebar'})}
                         className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-pink-500/20 font-medium appearance-none"
                       >
-                        <option value="feed">Feed Ad ($50)</option>
-                        <option value="sidebar">Sidebar Ad ($30)</option>
+                        <option value="feed">Feed Ad</option>
+                        <option value="sidebar">Sidebar Ad</option>
                       </select>
                     </div>
                     <div>
@@ -355,11 +354,7 @@ const AdsPage: React.FC = () => {
                   <div className="bg-pink-50 p-6 rounded-[2rem] flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-black text-pink-400 uppercase tracking-widest mb-1">Total Cost</p>
-                      <p className="text-2xl font-black text-pink-600">${formData.placement === 'feed' ? PRICES.feed : PRICES.sidebar}</p>
-                    </div>
-                    <div className="flex items-center gap-2 text-pink-400">
-                      <AlertCircle className="w-4 h-4" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Non-refundable</span>
+                      <p className="text-2xl font-black text-pink-600">${formData.duration * PRICES.perDay}</p>
                     </div>
                   </div>
 

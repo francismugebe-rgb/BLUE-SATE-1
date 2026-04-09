@@ -539,15 +539,6 @@ export default function ProfilePage() {
                         <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white uppercase tracking-widest ${getTierColor(targetUser.proTier)}`}>
                           {targetUser.proTier}
                         </span>
-                        {isOwnProfile && (
-                          <button 
-                            type="button"
-                            onClick={() => setIsUpgradeModalOpen(true)}
-                            className="text-[10px] font-black text-pink-500 uppercase tracking-widest hover:underline"
-                          >
-                            Upgrade
-                          </button>
-                        )}
                       </div>
                     )}
                     {isOwnProfile && (!targetUser?.proTier || targetUser.proTier === 'none') && (
