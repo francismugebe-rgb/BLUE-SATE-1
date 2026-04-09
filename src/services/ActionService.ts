@@ -42,7 +42,12 @@ export type ActionName =
   | 'FOLLOW_PAGE'
   | 'LIKE_PAGE'
   | 'CREATE_PAGE_POST'
-  | 'SEND_PAGE_MESSAGE';
+  | 'SEND_PAGE_MESSAGE'
+  | 'LIKE_REEL'
+  | 'COMMENT_REEL'
+  | 'VIEW_REEL'
+  | 'FOLLOW_USER'
+  | 'UNFOLLOW_USER';
 
 export interface ActionResponse {
   status: boolean;
@@ -760,6 +765,133 @@ export class ActionService {
       };
       const docRef = await addDoc(collection(db, `pages/${pageId}/posts`), postData);
       return { postId: docRef.id };
+    });
+  }
+
+  // --- REEL ACTION COMMANDS ---
+
+  static async likeReel(reelId: string): Promise<ActionResponse> {
+    return this.execute('LIKE_REEL', { reelId }, async (params, userId) => {
+      const { reelId } = params;
+      const reelRef = doc(db, 'reels', reelId);
+      const reelSnap = await getDoc(reelRef);
+      if (!reelSnap.exists()) throw new Error('Reel not found');
+      
+      const data = reelSnap.data();
+      const isLiked = data.likes?.includes(userId);
+
+      if (isLiked) {
+        await updateDoc(reelRef, {
+          likes: arrayRemove(userId)
+        });
+      } else {
+        await updateDoc(reelRef, {
+          likes: arrayUnion(userId)
+        });
+        
+        // Notify creator
+        if (data.userId !== userId) {
+          await addDoc(collection(db, 'notifications'), {
+            userId: data.userId,
+            actorId: userId,
+            type: 'like',
+            title: 'New Reel Like',
+            message: 'Liked your reel',
+            referenceId: reelId,
+            readStatus: false,
+            createdAt: serverTimestamp()
+          });
+        }
+      }
+      return { liked: !isLiked };
+    });
+  }
+
+  static async commentReel(reelId: string, text: string): Promise<ActionResponse> {
+    return this.execute('COMMENT_REEL', { reelId, text }, async (params, userId) => {
+      const { reelId, text } = params;
+      if (!text.trim()) throw new Error('Comment cannot be empty');
+
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      const userData = userDoc.data();
+
+      const commentData = {
+        userId,
+        displayName: userData?.displayName || 'Anonymous',
+        photoURL: userData?.photoURL || '',
+        text,
+        createdAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, `reels/${reelId}/comments`), commentData);
+      
+      // Update comment count
+      const reelRef = doc(db, 'reels', reelId);
+      const reelSnap = await getDoc(reelRef);
+      const currentCount = reelSnap.data()?.commentCount || 0;
+      await updateDoc(reelRef, { commentCount: currentCount + 1 });
+
+      return { commentId: docRef.id };
+    });
+  }
+
+  static async viewReel(reelId: string): Promise<ActionResponse> {
+    return this.execute('VIEW_REEL', { reelId }, async (params, userId) => {
+      const { reelId } = params;
+      const reelRef = doc(db, 'reels', reelId);
+      const reelSnap = await getDoc(reelRef);
+      if (!reelSnap.exists()) return { status: false };
+
+      const currentViews = reelSnap.data()?.views || 0;
+      await updateDoc(reelRef, { views: currentViews + 1 });
+      
+      return { views: currentViews + 1 };
+    });
+  }
+
+  // --- FOLLOW SYSTEM ---
+
+  static async followUser(targetId: string): Promise<ActionResponse> {
+    return this.execute('FOLLOW_USER', { targetId }, async (params, userId) => {
+      const { targetId } = params;
+      if (userId === targetId) throw new Error('Cannot follow yourself');
+
+      const userRef = doc(db, 'users', userId);
+      const targetRef = doc(db, 'users', targetId);
+
+      await runTransaction(db, async (transaction) => {
+        transaction.update(userRef, { following: arrayUnion(targetId) });
+        transaction.update(targetRef, { followers: arrayUnion(userId) });
+      });
+
+      // Notification
+      await addDoc(collection(db, 'notifications'), {
+        userId: targetId,
+        actorId: userId,
+        type: 'follow',
+        title: 'New Follower',
+        message: 'Started following you',
+        referenceId: userId,
+        readStatus: false,
+        createdAt: serverTimestamp()
+      });
+
+      return { followed: true };
+    });
+  }
+
+  static async unfollowUser(targetId: string): Promise<ActionResponse> {
+    return this.execute('UNFOLLOW_USER', { targetId }, async (params, userId) => {
+      const { targetId } = params;
+      const userRef = doc(db, 'users', userId);
+      const targetRef = doc(db, 'users', targetId);
+
+      await runTransaction(db, async (transaction) => {
+        transaction.update(userRef, { following: arrayRemove(targetId) });
+        transaction.update(targetRef, { followers: arrayRemove(userId) });
+      });
+
+      return { unfollowed: true };
     });
   }
 }

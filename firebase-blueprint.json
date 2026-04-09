@@ -58,9 +58,10 @@
         "userId": { "type": "string" },
         "videoUrl": { "type": "string" },
         "thumbnailUrl": { "type": "string" },
-        "description": { "type": "string" },
+        "caption": { "type": "string" },
         "likes": { "type": "array", "items": { "type": "string" } },
         "views": { "type": "number" },
+        "commentCount": { "type": "number" },
         "duration": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -218,6 +219,10 @@
     "/reels/{reelId}": {
       "schema": "Reel",
       "description": "Short videos"
+    },
+    "/reels/{reelId}/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Comments on a reel"
     },
     "/conversations/{conversationId}": {
       "schema": "Conversation",
