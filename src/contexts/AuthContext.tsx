@@ -145,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const role = isSuperAdmin ? 'admin' : 'user';
             const firstName = firebaseUser.displayName?.split(' ')[0] || '';
             const lastName = firebaseUser.displayName?.split(' ').slice(1).join(' ') || '';
-            const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/\s+/g, '');
+            const username = `${(firstName || '').toLowerCase()}.${(lastName || '').toLowerCase()}`.replace(/\s+/g, '');
 
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
@@ -166,7 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const isSuperAdmin = data.email === 'FRANCISMUGEBE@gmail.com';
             const firstName = data.firstName || data.displayName?.split(' ')[0] || '';
             const lastName = data.lastName || data.displayName?.split(' ').slice(1).join(' ') || '';
-            const expectedUsername = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/\s+/g, '');
+            const expectedUsername = `${(firstName || '').toLowerCase()}.${(lastName || '').toLowerCase()}`.replace(/\s+/g, '');
             
             let updates: any = {};
             if (!data.username || data.username !== expectedUsername) {
@@ -221,7 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { user: firebaseUser } = await createUserWithEmailAndPassword(auth, email, password);
       const isSuperAdmin = email === 'FRANCISMUGEBE@gmail.com';
       const role = isSuperAdmin ? 'admin' : 'user';
-      const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/\s+/g, '');
+      const username = `${(firstName || '').toLowerCase()}.${(lastName || '').toLowerCase()}`.replace(/\s+/g, '');
       const newProfile: UserProfile = {
         uid: firebaseUser.uid,
         email: email,

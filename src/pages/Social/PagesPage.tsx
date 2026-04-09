@@ -66,8 +66,8 @@ const PagesPage: React.FC = () => {
   };
 
   const filteredPages = pages.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.category.toLowerCase().includes(searchQuery.toLowerCase())
+    p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.category?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (loading) return <LoadingScreen />;

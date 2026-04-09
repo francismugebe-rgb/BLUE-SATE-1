@@ -44,6 +44,27 @@ const ProfileCompletionGuard: React.FC<{ children: React.ReactNode }> = ({ child
   return <>{children}</>;
 };
 
+const Toast: React.FC<{ message: string; title: string; onClose: () => void }> = ({ message, title, onClose }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -50, x: '-50%' }}
+      animate={{ opacity: 1, y: 20, x: '-50%' }}
+      exit={{ opacity: 0, y: -50, x: '-50%' }}
+      className="fixed top-0 left-1/2 z-[200] w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 flex items-center gap-4 cursor-pointer"
+      onClick={onClose}
+    >
+      <div className="w-12 h-12 rounded-full bg-pink-500 flex items-center justify-center text-white shrink-0">
+        <MessageCircle className="w-6 h-6" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h4 className="font-black text-slate-900 text-sm truncate">{title}</h4>
+        <p className="text-slate-500 text-xs font-medium truncate">{message}</p>
+      </div>
+      <div className="text-[10px] font-black text-pink-500 uppercase tracking-widest">Now</div>
+    </motion.div>
+  );
+};
+
 const Navigation: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -51,8 +72,38 @@ const Navigation: React.FC = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [activeToast, setActiveToast] = useState<{ id: string; title: string; message: string } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
+  const lastNotifId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const newNotif = snapshot.docs[0]?.data();
+      const id = snapshot.docs[0]?.id;
+      
+      if (newNotif && id !== lastNotifId.current) {
+        // If it's a new message and we're not on the chat page
+        if (newNotif.type === 'new_message' && location.pathname !== '/chat') {
+          setActiveToast({ id, title: newNotif.title, message: newNotif.message });
+          // Play sound
+          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
+          audio.play().catch(e => console.log('Audio play failed:', e));
+          
+          // Auto hide after 5 seconds
+          setTimeout(() => setActiveToast(null), 5000);
+        }
+        lastNotifId.current = id;
+      }
+    });
+  }, [user, location.pathname]);
 
   useEffect(() => {
     if (!user) return;
@@ -145,6 +196,18 @@ const Navigation: React.FC = () => {
 
   return (
     <>
+      <AnimatePresence>
+        {activeToast && (
+          <Toast 
+            title={activeToast.title} 
+            message={activeToast.message} 
+            onClose={() => {
+              navigate('/chat');
+              setActiveToast(null);
+            }} 
+          />
+        )}
+      </AnimatePresence>
       {/* Desktop Top Nav */}
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 hidden md:block">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
