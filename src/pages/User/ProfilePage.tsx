@@ -525,39 +525,42 @@ export default function ProfilePage() {
                     onChange={(e) => handlePhotoUpload(e, 'photo')}
                   />
                   {targetUser?.isVerified && (
-                    <div className="absolute bottom-2 right-2 w-10 h-10 bg-blue-500 rounded-xl shadow-md border-4 border-white flex items-center justify-center text-white">
+                    <div className="absolute top-2 right-2 w-10 h-10 bg-blue-500 rounded-xl shadow-md border-4 border-white flex items-center justify-center text-white z-20">
                       <Sparkles className="w-5 h-5 fill-white" />
                     </div>
                   )}
                   
                   {isOwnProfile && (
-                    <div className="mt-4 flex flex-col gap-3 w-full">
-                      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-                        <div className="flex items-center justify-between mb-2">
+                    <div className="mt-6 flex flex-col gap-4 w-full">
+                      <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+                        {/* Wallet Section */}
+                        <div className="space-y-3">
                           <div className="flex flex-col">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Wallet</span>
-                            <span className="text-lg font-black text-slate-900">${user?.walletBalance || 0}</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Wallet Balance</span>
+                            <span className="text-2xl font-black text-slate-900">${user?.walletBalance || 0}</span>
                           </div>
                           <button 
                             onClick={() => setIsDepositModalOpen(true)}
-                            className="p-2 bg-pink-50 text-pink-500 rounded-xl hover:bg-pink-100 transition-all shadow-sm"
-                            title="Deposit"
+                            className="w-full py-3 bg-pink-50 text-pink-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-pink-100 transition-all flex items-center justify-center gap-2"
                           >
                             <Plus className="w-4 h-4" />
+                            Deposit Money
                           </button>
                         </div>
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                        
+                        {/* Points Section */}
+                        <div className="pt-6 border-t border-slate-100 space-y-3">
                           <div className="flex flex-col">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Points</span>
-                            <span className="text-sm font-black text-slate-900">{user?.points || 0}</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Points Balance</span>
+                            <span className="text-xl font-black text-slate-900">{user?.points || 0}</span>
                           </div>
                           <button 
                             onClick={handleConvertPoints}
                             disabled={(user?.points || 0) < 100}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all disabled:opacity-50"
+                            className="w-full py-3 bg-slate-50 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2 border border-slate-100"
                           >
-                            <RefreshCw className="w-3 h-3" />
-                            Convert
+                            <RefreshCw className="w-4 h-4" />
+                            Convert to Cash
                           </button>
                         </div>
                       </div>
