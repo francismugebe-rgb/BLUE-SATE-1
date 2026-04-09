@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet } from 'lucide-react';
+import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet, X } from 'lucide-react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDocs, or, and } from 'firebase/firestore';
@@ -27,6 +27,7 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState<'photo' | 'cover' | null>(null);
   const [friendStatus, setFriendStatus] = useState<'none' | 'pending' | 'friends'>('none');
+  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState('10');
@@ -91,8 +92,10 @@ export default function ProfilePage() {
         const request = snapshot.docs[0].data();
         if (request.status === 'accepted') {
           setFriendStatus('friends');
+          setPendingRequestId(null);
         } else {
           setFriendStatus('pending');
+          setPendingRequestId(snapshot.docs[0].id);
         }
       }
     });
@@ -131,6 +134,20 @@ export default function ProfilePage() {
       }
     } catch (error) {
       console.error("Error adding friend:", error);
+    }
+  };
+
+  const handleCancelFriend = async () => {
+    if (!pendingRequestId) return;
+    try {
+      const response = await ActionService.cancelFriendRequest(pendingRequestId);
+      if (response.status) {
+        setMessage({ type: 'success', text: 'Friend request cancelled' });
+      } else {
+        setMessage({ type: 'error', text: response.error || 'Failed to cancel request' });
+      }
+    } catch (error) {
+      console.error("Error cancelling friend request:", error);
     }
   };
 
@@ -561,18 +578,18 @@ export default function ProfilePage() {
                         {user?.following?.includes(userId!) ? 'Following' : 'Follow'}
                       </button>
                       <button 
-                        onClick={handleAddFriend}
-                        disabled={friendStatus !== 'none'}
+                        onClick={friendStatus === 'pending' ? handleCancelFriend : handleAddFriend}
+                        disabled={friendStatus === 'friends'}
                         className={`px-8 py-3 rounded-2xl font-bold transition-all shadow-lg flex items-center gap-2 ${
                           friendStatus === 'friends' 
                             ? 'bg-green-500 text-white shadow-green-500/20' 
                             : friendStatus === 'pending'
-                              ? 'bg-slate-100 text-slate-400 shadow-none cursor-not-allowed'
+                              ? 'bg-slate-100 text-slate-600 shadow-none hover:bg-slate-200'
                               : 'bg-pink-500 text-white shadow-pink-500/20 hover:bg-pink-600'
                         }`}
                       >
-                        {friendStatus === 'friends' ? <UserCheck className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
-                        {friendStatus === 'friends' ? 'Friends' : friendStatus === 'pending' ? 'Request Sent' : 'Add Friend'}
+                        {friendStatus === 'friends' ? <UserCheck className="w-5 h-5" /> : friendStatus === 'pending' ? <X className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                        {friendStatus === 'friends' ? 'Friends' : friendStatus === 'pending' ? 'Cancel Request' : 'Add Friend'}
                       </button>
                     </div>
                   )}

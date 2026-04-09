@@ -19,12 +19,15 @@ import { db, auth } from '../lib/firebase';
 export type ActionName = 
   | 'SEND_FRIEND_REQUEST'
   | 'ACCEPT_FRIEND_REQUEST'
+  | 'DECLINE_FRIEND_REQUEST'
+  | 'CANCEL_FRIEND_REQUEST'
   | 'BLOCK_USER'
   | 'LIKE_PROFILE'
   | 'MATCH_USER'
   | 'UNMATCH_USER'
   | 'SEND_MESSAGE'
   | 'READ_MESSAGE'
+  | 'READ_NOTIFICATION'
   | 'MAKE_PAYMENT'
   | 'SUBSCRIBE_USER'
   | 'CREATE_POST'
@@ -57,11 +60,15 @@ export class ActionService {
         return { status: false, action: name, error: 'Authentication required' };
       }
 
-      // 2. Audit Logging
+      // 2. Audit Logging - Filter out undefined values to prevent Firestore errors
+      const sanitizedParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v !== undefined)
+      );
+
       await addDoc(collection(db, 'auditLogs'), {
         action: name,
         userId: currentUser.uid,
-        params,
+        params: sanitizedParams,
         timestamp: serverTimestamp()
       });
 
@@ -95,7 +102,21 @@ export class ActionService {
       if (senderId === receiverId) throw new Error('Cannot add self');
 
       const receiverDoc = await getDoc(doc(db, 'users', receiverId));
-      if (!receiverDoc.exists()) throw new Error('User does not exist');
+      if (!receiverDoc.exists()) throw new Error('Receiver does not exist');
+
+      // Check if already friends
+      const senderDoc = await getDoc(doc(db, 'users', senderId));
+      const senderData = senderDoc.data();
+      if (senderData?.friends?.includes(receiverId)) throw new Error('Already friends');
+
+      // Check if blocked
+      const blockQuery = query(
+        collection(db, 'blocks'),
+        where('userId', '==', receiverId),
+        where('targetId', '==', senderId)
+      );
+      const blockSnap = await getDocs(blockQuery);
+      if (!blockSnap.empty) throw new Error('User has blocked you');
 
       // Duplicate Check
       const q = query(
@@ -120,10 +141,12 @@ export class ActionService {
       // Notification
       await addDoc(collection(db, 'notifications'), {
         userId: receiverId,
+        actorId: senderId,
         type: 'friend_request',
-        fromId: senderId,
-        text: 'Sent you a friend request',
-        read: false,
+        title: 'New Friend Request',
+        message: 'You have a new friend request',
+        referenceId: docRef.id,
+        readStatus: false,
         createdAt: serverTimestamp()
       });
 
@@ -139,10 +162,10 @@ export class ActionService {
         const requestRef = doc(db, 'friendRequests', requestId);
         const requestDoc = await transaction.get(requestRef);
 
-        if (!requestDoc.exists()) throw new Error('Request exists');
+        if (!requestDoc.exists()) throw new Error('Request not found');
         const data = requestDoc.data();
-        if (data.toId !== userId) throw new Error('User owns request');
-        if (data.status !== 'pending') throw new Error('Request pending');
+        if (data.toId !== userId) throw new Error('Unauthorized');
+        if (data.status !== 'pending') throw new Error('Request no longer pending');
 
         // Update Request
         transaction.update(requestRef, { status: 'accepted', updatedAt: serverTimestamp() });
@@ -154,19 +177,86 @@ export class ActionService {
         transaction.update(senderRef, { friends: arrayUnion(data.toId) });
         transaction.update(receiverRef, { friends: arrayUnion(data.fromId) });
 
-        // Notification
+        // Notification to sender
         const notificationRef = doc(collection(db, 'notifications'));
         transaction.set(notificationRef, {
           userId: data.fromId,
-          type: 'friend_request_accepted',
-          fromId: userId,
-          text: 'Accepted your friend request',
-          read: false,
+          actorId: userId,
+          type: 'friend_accept',
+          title: 'Friend Request Accepted',
+          message: 'Your friend request was accepted',
+          referenceId: requestId,
+          readStatus: false,
           createdAt: serverTimestamp()
         });
 
         return { friendshipCreated: true };
       });
+    });
+  }
+
+  static async declineFriendRequest(requestId: string): Promise<ActionResponse> {
+    return this.execute('DECLINE_FRIEND_REQUEST', { requestId }, async (params, userId) => {
+      const { requestId } = params;
+      const requestRef = doc(db, 'friendRequests', requestId);
+      const requestDoc = await getDoc(requestRef);
+
+      if (!requestDoc.exists()) throw new Error('Request not found');
+      const data = requestDoc.data();
+      if (data.toId !== userId) throw new Error('Unauthorized');
+      if (data.status !== 'pending') throw new Error('Request no longer pending');
+
+      await updateDoc(requestRef, { status: 'declined', updatedAt: serverTimestamp() });
+
+      // Optional: Notify sender about decline? The spec says "Update status declined" and "EVENT: FRIEND_REQUEST_DECLINED"
+      // Usually we don't notify about declines to avoid negative feelings, but we can if requested.
+      
+      return { declined: true };
+    });
+  }
+
+  static async cancelFriendRequest(requestId: string): Promise<ActionResponse> {
+    return this.execute('CANCEL_FRIEND_REQUEST', { requestId }, async (params, userId) => {
+      const { requestId } = params;
+      const requestRef = doc(db, 'friendRequests', requestId);
+      const requestDoc = await getDoc(requestRef);
+
+      if (!requestDoc.exists()) throw new Error('Request not found');
+      const data = requestDoc.data();
+      if (data.fromId !== userId) throw new Error('Unauthorized');
+      if (data.status !== 'pending') throw new Error('Request no longer pending');
+
+      await deleteDoc(requestRef);
+
+      // Also delete the notification sent to the receiver
+      const notifQuery = query(
+        collection(db, 'notifications'),
+        where('referenceId', '==', requestId),
+        where('type', '==', 'friend_request')
+      );
+      const notifSnap = await getDocs(notifQuery);
+      notifSnap.forEach(async (d) => {
+        await deleteDoc(d.ref);
+      });
+
+      return { cancelled: true };
+    });
+  }
+
+  static async readNotification(notificationId: string): Promise<ActionResponse> {
+    return this.execute('READ_NOTIFICATION', { notificationId }, async (params, userId) => {
+      const { notificationId } = params;
+      const notifRef = doc(db, 'notifications', notificationId);
+      const notifDoc = await getDoc(notifRef);
+
+      if (!notifDoc.exists()) throw new Error('Notification not found');
+      if (notifDoc.data().userId !== userId) throw new Error('Unauthorized');
+
+      // Mark as read and potentially delete if "clear notification" means removal
+      // The user said: "If notification is read please clear notification as well"
+      // I'll delete it to "clear" it.
+      await deleteDoc(notifRef);
+      return { cleared: true };
     });
   }
 
@@ -221,10 +311,11 @@ export class ActionService {
         const notify = async (uid: string, otherId: string) => {
           await addDoc(collection(db, 'notifications'), {
             userId: uid,
+            actorId: otherId,
             type: 'match',
-            fromId: otherId,
-            text: 'You have a new match!',
-            read: false,
+            title: 'New Match!',
+            message: 'You have a new match!',
+            readStatus: false,
             createdAt: serverTimestamp()
           });
         };
@@ -263,10 +354,11 @@ export class ActionService {
           const notifRef = doc(collection(db, 'notifications'));
           transaction.set(notifRef, {
             userId: uid,
+            actorId: otherId,
             type: 'match',
-            fromId: otherId,
-            text: 'You have a new match!',
-            read: false,
+            title: 'New Match!',
+            message: 'You have a new match!',
+            readStatus: false,
             createdAt: serverTimestamp()
           });
         };
@@ -325,10 +417,12 @@ export class ActionService {
       if (otherId) {
         await addDoc(collection(db, 'notifications'), {
           userId: otherId,
+          actorId: userId,
           type: 'new_message',
-          fromId: userId,
-          text: 'Sent you a message',
-          read: false,
+          title: 'New Message',
+          message: 'Sent you a message',
+          referenceId: conversationId,
+          readStatus: false,
           createdAt: serverTimestamp()
         });
       }
@@ -441,10 +535,12 @@ export class ActionService {
           const notificationRef = doc(collection(db, 'notifications'));
           transaction.set(notificationRef, {
             userId: postData.userId,
+            actorId: userId,
             type: 'like',
-            fromId: userId,
-            text: 'Liked your post',
-            read: false,
+            title: 'New Like',
+            message: 'Liked your post',
+            referenceId: postId,
+            readStatus: false,
             createdAt: serverTimestamp()
           });
         }
@@ -473,15 +569,18 @@ export class ActionService {
 
   // --- NOTIFICATION ACTION COMMANDS ---
 
-  static async createNotification(targetUserId: string, type: string, text: string): Promise<ActionResponse> {
-    return this.execute('CREATE_NOTIFICATION', { targetUserId, type, text }, async (params) => {
-      const { targetUserId, type, text } = params;
+  static async createNotification(targetUserId: string, type: string, title: string, message: string, referenceId?: string): Promise<ActionResponse> {
+    return this.execute('CREATE_NOTIFICATION', { targetUserId, type, title, message, referenceId }, async (params, actorId) => {
+      const { targetUserId, type, title, message, referenceId } = params;
       
       const docRef = await addDoc(collection(db, 'notifications'), {
         userId: targetUserId,
+        actorId,
         type,
-        text,
-        read: false,
+        title,
+        message,
+        referenceId: referenceId || null,
+        readStatus: false,
         createdAt: serverTimestamp()
       });
 

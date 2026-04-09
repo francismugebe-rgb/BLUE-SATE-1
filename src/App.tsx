@@ -79,32 +79,52 @@ const Navigation: React.FC = () => {
 
   const handleAcceptFriend = async (notif: any) => {
     try {
-      // Find the friend request ID
-      const q = query(
-        collection(db, 'friendRequests'),
-        where('fromId', '==', notif.fromId),
-        where('toId', '==', user?.uid),
-        where('status', '==', 'pending')
-      );
-      const snapshot = await getDocs(q);
-      
-      if (snapshot.empty) {
-        alert("Friend request not found or already processed.");
+      const requestId = notif.referenceId;
+      if (!requestId) {
+        alert("Request ID missing in notification");
         return;
       }
 
-      const requestId = snapshot.docs[0].id;
       const response = await ActionService.acceptFriendRequest(requestId);
 
       if (response.status) {
-        // Mark notification as read
-        await updateDoc(doc(db, 'notifications', notif.id), { read: true });
+        // Mark notification as read (clears it in our case)
+        await ActionService.readNotification(notif.id);
         alert("Friend request accepted!");
       } else {
         alert(response.error || "Failed to accept request");
       }
     } catch (error) {
       console.error("Error accepting friend:", error);
+    }
+  };
+
+  const handleDeclineFriend = async (notif: any) => {
+    try {
+      const requestId = notif.referenceId;
+      if (!requestId) {
+        alert("Request ID missing in notification");
+        return;
+      }
+
+      const response = await ActionService.declineFriendRequest(requestId);
+
+      if (response.status) {
+        await ActionService.readNotification(notif.id);
+        alert("Friend request declined");
+      } else {
+        alert(response.error || "Failed to decline request");
+      }
+    } catch (error) {
+      console.error("Error declining friend:", error);
+    }
+  };
+
+  const handleReadNotification = async (notifId: string) => {
+    try {
+      await ActionService.readNotification(notifId);
+    } catch (error) {
+      console.error("Error clearing notification:", error);
     }
   };
 
@@ -171,27 +191,39 @@ const Navigation: React.FC = () => {
                   >
                     <div className="px-4 py-3 border-b border-slate-50 flex items-center justify-between">
                       <h3 className="font-black text-slate-900">Notifications</h3>
-                      <button className="text-xs font-bold text-pink-500 hover:underline">Mark all as read</button>
+                      <button 
+                        onClick={() => notifications.forEach(n => handleReadNotification(n.id))}
+                        className="text-xs font-bold text-pink-500 hover:underline"
+                      >
+                        Clear all
+                      </button>
                     </div>
                     <div className="max-h-96 overflow-y-auto">
                       {notifications.length > 0 ? (
                         notifications.map((n) => (
-                          <div key={n.id} className={`p-4 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${!n.read ? 'bg-pink-50/30' : ''}`}>
+                          <div 
+                            key={n.id} 
+                            className={`p-4 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${!n.readStatus ? 'bg-pink-50/30' : ''}`}
+                            onClick={() => !['friend_request'].includes(n.type) && handleReadNotification(n.id)}
+                          >
                             <div className="flex gap-3">
                               <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0">
                                 <Bell className="w-5 h-5 text-pink-500" />
                               </div>
                               <div className="flex-1">
-                                <p className="text-sm text-slate-700 font-medium leading-tight mb-2">{n.text}</p>
-                                {n.type === 'friend_request' && !n.read && (
+                                <p className="text-sm text-slate-700 font-medium leading-tight mb-2">{n.message || n.text}</p>
+                                {n.type === 'friend_request' && !n.readStatus && (
                                   <div className="flex gap-2">
                                     <button 
-                                      onClick={() => handleAcceptFriend(n)}
+                                      onClick={(e) => { e.stopPropagation(); handleAcceptFriend(n); }}
                                       className="px-3 py-1 bg-pink-500 text-white text-xs font-bold rounded-lg hover:bg-pink-600 transition-all"
                                     >
                                       Accept
                                     </button>
-                                    <button className="px-3 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-lg hover:bg-slate-200 transition-all">
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleDeclineFriend(n); }}
+                                      className="px-3 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-lg hover:bg-slate-200 transition-all"
+                                    >
                                       Decline
                                     </button>
                                   </div>
