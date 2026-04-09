@@ -147,7 +147,7 @@ const PagesPage: React.FC = () => {
                 onClick={() => setIsCreateModalOpen(true)}
                 className="w-full py-3 bg-white text-pink-500 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all"
               >
-                Get Started
+                Create Page
               </button>
             </div>
           </div>

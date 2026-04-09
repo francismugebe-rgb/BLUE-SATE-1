@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, getDoc, where, limit } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, MessageCircle, Share2, Music2, UserPlus, MoreVertical, Play, Plus, X, Send, UserCheck, Volume2, VolumeX, Crown } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music2, UserPlus, MoreVertical, Play, Plus, X, Send, UserCheck, Volume2, VolumeX, Crown, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import LoadingScreen from '../../components/LoadingScreen';
 import { ActionService } from '../../services/ActionService';
@@ -305,9 +305,19 @@ const ReelsPage: React.FC = () => {
             </div>
           ))
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-white gap-4">
-            <div className="w-20 h-20 bg-slate-800 rounded-full animate-pulse" />
-            <p className="font-bold text-slate-400">No reels found. Upload your first one!</p>
+          <div className="h-full flex flex-col items-center justify-center text-white gap-6">
+            <div className="w-24 h-24 bg-slate-800 rounded-[2rem] flex items-center justify-center shadow-2xl border border-slate-700">
+              <Zap className="w-12 h-12 text-pink-500 fill-pink-500" />
+            </div>
+            <div className="text-center">
+              <p className="font-black text-2xl text-white mb-2">No Reels Yet</p>
+              <p className="text-slate-400 font-medium">Be the first to share a short video!</p>
+            </div>
+            <label className="flex items-center gap-3 bg-pink-500 text-white px-8 py-4 rounded-2xl font-black cursor-pointer hover:bg-pink-600 transition-all shadow-xl shadow-pink-500/20">
+              <Plus className="w-6 h-6" />
+              <span>Upload Your First Reel</span>
+              <input type="file" accept="video/*" className="hidden" onChange={handleFileSelect} disabled={isUploading} />
+            </label>
           </div>
         )}
       </div>

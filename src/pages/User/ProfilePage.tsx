@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet, X, Plus, Coins, RefreshCw, Crown, Settings } from 'lucide-react';
+import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet, X, Plus, Coins, RefreshCw, Crown, Settings, Layout } from 'lucide-react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDocs, or, and } from 'firebase/firestore';
@@ -962,6 +962,47 @@ export default function ProfilePage() {
                   className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium disabled:opacity-70"
                   placeholder="Hiking, Cooking, Travel..."
                 />
+              </div>
+
+              {/* My Pages Section */}
+              <div className="mt-12">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center text-pink-500">
+                      <Layout className="w-5 h-5 fill-pink-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900">My Pages</h3>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Business & Community</p>
+                    </div>
+                  </div>
+                  {isOwnProfile && (
+                    <Link 
+                      to="/pages" 
+                      className="flex items-center gap-2 px-4 py-2 bg-pink-500 text-white rounded-xl font-bold text-sm hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Create Page
+                    </Link>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {isOwnProfile && (
+                    <Link 
+                      to="/pages"
+                      className="p-6 rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-200 flex items-center gap-4 hover:bg-slate-100 hover:border-pink-300 transition-all group"
+                    >
+                      <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-slate-400 group-hover:text-pink-500 transition-colors">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-900 uppercase tracking-widest group-hover:text-pink-500 transition-colors">Create New Page</p>
+                        <p className="text-xs font-bold text-slate-400">Start your business journey</p>
+                      </div>
+                    </Link>
+                  )}
+                </div>
               </div>
 
               {/* Reels Section */}
