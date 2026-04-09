@@ -110,8 +110,9 @@ const Navigation: React.FC = () => {
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', user.uid),
+      where('readStatus', '==', false),
       orderBy('createdAt', 'desc'),
-      limit(10)
+      limit(20)
     );
     return onSnapshot(q, (snapshot) => {
       setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -229,7 +230,14 @@ const Navigation: React.FC = () => {
                     : 'text-slate-500 hover:bg-slate-50'
                 }`}
               >
-                <item.icon className="w-4 h-4" />
+                <div className="relative">
+                  <item.icon className="w-4 h-4" />
+                  {item.path === '/chat' && notifications.filter(n => n.type === 'new_message' && !n.readStatus).length > 0 && (
+                    <span className="absolute -top-2 -right-2 w-4 h-4 bg-pink-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white">
+                      {notifications.filter(n => n.type === 'new_message' && !n.readStatus).length}
+                    </span>
+                  )}
+                </div>
                 {item.label}
               </Link>
             ))}
@@ -324,12 +332,12 @@ const Navigation: React.FC = () => {
                     <img src={user.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-pink-500 text-xs font-black">
-                      {user.displayName?.[0] || user.email?.[0]}
+                      {user.displayName?.[0] || user.email?.[0] || 'U'}
                     </div>
                   )}
                 </div>
                 <span className="text-sm font-black text-slate-700 group-hover:text-pink-500 transition-colors">
-                  {user.displayName || user.email.split('@')[0]}
+                  {user.displayName || user.email?.split('@')[0] || 'User'}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -396,9 +404,18 @@ const Navigation: React.FC = () => {
                     )}
 
                     <Link 
+                      to="/pages" 
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-pink-500 transition-colors"
+                    >
+                      <Layout className="w-4 h-4" />
+                      Create Page
+                    </Link>
+
+                    <Link 
                       to="/profile" 
                       onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                      className="flex items-center gap-3 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-pink-500 transition-colors"
                     >
                       <Settings className="w-4 h-4" />
                       Settings
@@ -435,7 +452,14 @@ const Navigation: React.FC = () => {
                 location.pathname === item.path ? 'text-pink-500' : 'text-slate-400'
               }`}
             >
-              <item.icon className={`w-6 h-6 ${location.pathname === item.path ? 'fill-pink-500/10' : ''}`} />
+              <div className="relative">
+                <item.icon className={`w-6 h-6 ${location.pathname === item.path ? 'fill-pink-500/10' : ''}`} />
+                {item.path === '/chat' && notifications.filter(n => n.type === 'new_message' && !n.readStatus).length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-pink-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white">
+                    {notifications.filter(n => n.type === 'new_message' && !n.readStatus).length}
+                  </span>
+                )}
+              </div>
               <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
             </Link>
           ))}

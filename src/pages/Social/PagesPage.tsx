@@ -66,8 +66,8 @@ const PagesPage: React.FC = () => {
   };
 
   const filteredPages = pages.filter(p => 
-    p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.category?.toLowerCase().includes(searchQuery.toLowerCase())
+    (p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (p.category || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (loading) return <LoadingScreen />;
@@ -122,7 +122,7 @@ const PagesPage: React.FC = () => {
                           <img src={page.photoURL} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-pink-500 font-black text-xs">
-                            {page.name[0]}
+                            {page.name?.[0] || 'P'}
                           </div>
                         )}
                       </div>
@@ -174,7 +174,7 @@ const PagesPage: React.FC = () => {
                         {page.photoURL ? (
                           <img src={page.photoURL} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-2xl font-black text-pink-500">{page.name[0]}</span>
+                          <span className="text-2xl font-black text-pink-500">{page.name?.[0] || 'P'}</span>
                         )}
                       </div>
                     </div>

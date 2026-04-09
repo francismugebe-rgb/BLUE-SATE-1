@@ -206,11 +206,11 @@ const ReelsPage: React.FC = () => {
   if (loading) return <LoadingScreen />;
 
   return (
-    <div className="h-screen bg-black overflow-hidden relative">
+    <div className="h-screen bg-slate-950 overflow-hidden relative flex justify-center items-center md:py-8">
       <div 
         ref={containerRef}
         onScroll={handleScroll}
-        className="h-full overflow-y-scroll snap-y snap-mandatory scrollbar-hide"
+        className="h-full w-full max-w-[450px] md:h-full md:aspect-[9/19] bg-black overflow-y-scroll snap-y snap-mandatory scrollbar-hide relative shadow-[0_0_100px_rgba(0,0,0,0.8)] md:border-[12px] border-slate-800 md:rounded-[3rem]"
       >
         {reels.length > 0 ? (
           reels.map((reel, i) => (
@@ -290,7 +290,7 @@ const ReelsPage: React.FC = () => {
               <div className="absolute bottom-10 left-4 right-16 z-10">
                 <Link to={`/profile/${reel.userId}`} className="inline-block">
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-white font-black text-lg hover:text-pink-500 transition-colors">@{reel.displayName || 'user'}</h3>
+                    <span className="text-white font-black text-lg hover:text-pink-500 transition-colors">@{reel.displayName || 'user'}</span>
                     {reel.isSuperAdmin && <Crown className="w-5 h-5 text-yellow-400 fill-yellow-400" />}
                   </div>
                 </Link>
@@ -323,7 +323,7 @@ const ReelsPage: React.FC = () => {
       </div>
 
       {/* Top Nav Overlay */}
-      <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[450px] p-6 flex justify-between items-center z-20">
         <div className="w-10" /> {/* Spacer */}
         <div className="flex gap-8">
           <button 

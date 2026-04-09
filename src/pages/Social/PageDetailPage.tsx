@@ -214,7 +214,7 @@ const PageDetailPage: React.FC = () => {
               {page.photoURL ? (
                 <img src={page.photoURL} alt="" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-4xl font-black text-pink-500">{page.name[0]}</span>
+                <span className="text-4xl font-black text-pink-500">{page.name?.[0] || 'P'}</span>
               )}
             </div>
             {isOwner && (
@@ -395,7 +395,7 @@ const PageDetailPage: React.FC = () => {
                           <img src={page.photoURL} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-pink-500 font-black">
-                            {page.name[0]}
+                            {page.name?.[0] || 'P'}
                           </div>
                         )}
                       </div>

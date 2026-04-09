@@ -75,7 +75,7 @@ const ChatPage: React.FC = () => {
                 ...conv,
                 otherUser: {
                   uid: otherId,
-                  displayName: pageData.name,
+                  displayName: pageData.name || 'Page',
                   photoURL: pageData.photoURL || `https://picsum.photos/seed/${otherId}/100/100`,
                   isPage: true
                 }
