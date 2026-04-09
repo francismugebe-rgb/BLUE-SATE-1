@@ -142,6 +142,7 @@
       "properties": {
         "id": { "type": "string" },
         "userId": { "type": "string" },
+        "userName": { "type": "string" },
         "amount": { "type": "number" },
         "type": { "type": "string", "enum": ["deposit", "withdrawal", "pro_upgrade"] },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
@@ -150,6 +151,24 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "userId", "amount", "type", "status", "createdAt"]
+    },
+    "Page": {
+      "title": "Page",
+      "description": "A business or community page",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "photoURL": { "type": "string", "format": "uri" },
+        "coverURL": { "type": "string", "format": "uri" },
+        "followers": { "type": "array", "items": { "type": "string" } },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "createdAt"]
     },
     "Settings": {
       "title": "Settings",
@@ -219,6 +238,14 @@
     "/payments/{paymentId}": {
       "schema": "Payment",
       "description": "Payment transactions"
+    },
+    "/pages/{pageId}": {
+      "schema": "Page",
+      "description": "Page documents"
+    },
+    "/pages/{pageId}/posts/{postId}": {
+      "schema": "Post",
+      "description": "Posts on a page"
     }
   }
 }

@@ -50,21 +50,37 @@ const ChatPage: React.FC = () => {
         ...doc.data()
       })) as Conversation[];
 
-      // Fetch other user data for each conversation
+      // Fetch other participant data (User or Page)
       const convsWithData = await Promise.all(convs.map(async (conv) => {
-        const otherUserId = conv.participants.find(id => id !== user.uid);
-        if (otherUserId) {
-          const userDoc = await getDoc(doc(db, 'users', otherUserId));
+        const otherId = conv.participants.find(id => id !== user.uid);
+        if (otherId) {
+          // Try fetching from users first
+          const userDoc = await getDoc(doc(db, 'users', otherId));
           if (userDoc.exists()) {
             const userData = userDoc.data();
             return {
               ...conv,
               otherUser: {
-                uid: otherUserId,
+                uid: otherId,
                 displayName: userData.displayName || userData.email?.split('@')[0] || 'User',
-                photoURL: userData.photoURL || `https://picsum.photos/seed/${otherUserId}/100/100`
+                photoURL: userData.photoURL || `https://picsum.photos/seed/${otherId}/100/100`
               }
             };
+          } else {
+            // Try fetching from pages
+            const pageDoc = await getDoc(doc(db, 'pages', otherId));
+            if (pageDoc.exists()) {
+              const pageData = pageDoc.data();
+              return {
+                ...conv,
+                otherUser: {
+                  uid: otherId,
+                  displayName: pageData.name,
+                  photoURL: pageData.photoURL || `https://picsum.photos/seed/${otherId}/100/100`,
+                  isPage: true
+                }
+              };
+            }
           }
         }
         return conv;

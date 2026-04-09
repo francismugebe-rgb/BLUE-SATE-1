@@ -90,10 +90,12 @@ interface UserProfile {
   lookingFor?: string;
   age?: number;
   location?: string;
+  username?: string;
   isDatingActive?: boolean;
   likedUsers?: string[];
   points?: number;
   isVerified?: boolean;
+  isSuperAdmin?: boolean;
   proTier?: 'none' | 'bronze' | 'gold' | 'platinum';
   proExpiration?: any;
   phoneNumber?: string;
@@ -137,17 +139,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Initial check/create
           const userDoc = await getDoc(userRef);
+          
           if (!userDoc.exists()) {
-            const role = firebaseUser.email === 'FRANCISMUGEBE@gmail.com' ? 'admin' : 'user';
+            const isSuperAdmin = firebaseUser.email === 'FRANCISMUGEBE@gmail.com';
+            const role = isSuperAdmin ? 'admin' : 'user';
+            const firstName = firebaseUser.displayName?.split(' ')[0] || '';
+            const lastName = firebaseUser.displayName?.split(' ').slice(1).join(' ') || '';
+            const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/\s+/g, '');
+
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || '',
+              firstName,
+              lastName,
+              username,
               photoURL: firebaseUser.photoURL || '',
               role: role,
+              isSuperAdmin,
               createdAt: serverTimestamp()
             };
             await setDoc(userRef, newProfile);
+          } else {
+            // Correct existing users
+            const data = userDoc.data() as UserProfile;
+            const isSuperAdmin = data.email === 'FRANCISMUGEBE@gmail.com';
+            const firstName = data.firstName || data.displayName?.split(' ')[0] || '';
+            const lastName = data.lastName || data.displayName?.split(' ').slice(1).join(' ') || '';
+            const expectedUsername = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/\s+/g, '');
+            
+            let updates: any = {};
+            if (!data.username || data.username !== expectedUsername) {
+              updates.username = expectedUsername;
+              updates.firstName = firstName;
+              updates.lastName = lastName;
+            }
+            if (data.isSuperAdmin !== isSuperAdmin) {
+              updates.isSuperAdmin = isSuperAdmin;
+            }
+
+            if (Object.keys(updates).length > 0) {
+              await setDoc(userRef, updates, { merge: true });
+            }
           }
 
           // Real-time listener
@@ -186,14 +219,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async (email: string, password: string, firstName: string, lastName: string) => {
     try {
       const { user: firebaseUser } = await createUserWithEmailAndPassword(auth, email, password);
-      const role = email === 'FRANCISMUGEBE@gmail.com' ? 'admin' : 'user';
+      const isSuperAdmin = email === 'FRANCISMUGEBE@gmail.com';
+      const role = isSuperAdmin ? 'admin' : 'user';
+      const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/\s+/g, '');
       const newProfile: UserProfile = {
         uid: firebaseUser.uid,
         email: email,
         firstName: firstName,
         lastName: lastName,
         displayName: `${firstName} ${lastName}`,
-        role: role
+        username: username,
+        role: role,
+        isSuperAdmin
       };
       const path = `users/${firebaseUser.uid}`;
       try {

@@ -37,7 +37,12 @@ export type ActionName =
   | 'CREATE_AD'
   | 'APPROVE_AD'
   | 'DELETE_AD'
-  | 'BAN_USER';
+  | 'BAN_USER'
+  | 'CREATE_PAGE'
+  | 'FOLLOW_PAGE'
+  | 'LIKE_PAGE'
+  | 'CREATE_PAGE_POST'
+  | 'SEND_PAGE_MESSAGE';
 
 export interface ActionResponse {
   status: boolean;
@@ -527,13 +532,14 @@ export class ActionService {
 
   // --- PAYMENT ACTION COMMANDS ---
 
-  static async makePayment(amount: number, method: string): Promise<ActionResponse> {
-    return this.execute('MAKE_PAYMENT', { amount, method }, async (params, userId) => {
-      const { amount, method } = params;
+  static async makePayment(amount: number, method: string, userName?: string): Promise<ActionResponse> {
+    return this.execute('MAKE_PAYMENT', { amount, method, userName }, async (params, userId) => {
+      const { amount, method, userName } = params;
       if (amount <= 0) throw new Error('Amount valid');
 
       const transactionData = {
         userId,
+        userName: userName || 'Unknown User',
         amount,
         method,
         status: 'completed',
@@ -578,8 +584,15 @@ export class ActionService {
       const { text, mediaUrl, mediaType } = params;
       if (!text.trim() && !mediaUrl) throw new Error('Content rules');
 
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      const userData = userDoc.data();
+
       const postData = {
         userId,
+        displayName: userData?.displayName || 'Anonymous',
+        photoURL: userData?.photoURL || '',
+        isSuperAdmin: userData?.isSuperAdmin || false,
+        isVerified: userData?.isVerified || false,
         text,
         mediaUrl,
         mediaType,
@@ -685,6 +698,68 @@ export class ActionService {
       });
 
       return { banned: true };
+    });
+  }
+
+  // --- PAGE ACTION COMMANDS ---
+
+  static async createPage(name: string, description: string, category: string): Promise<ActionResponse> {
+    return this.execute('CREATE_PAGE', { name, description, category }, async (params, userId) => {
+      const { name, description, category } = params;
+      const pageData = {
+        ownerId: userId,
+        name,
+        description,
+        category,
+        followers: [],
+        likes: [],
+        createdAt: serverTimestamp()
+      };
+      const docRef = await addDoc(collection(db, 'pages'), pageData);
+      return { pageId: docRef.id };
+    });
+  }
+
+  static async followPage(pageId: string): Promise<ActionResponse> {
+    return this.execute('FOLLOW_PAGE', { pageId }, async (params, userId) => {
+      const { pageId } = params;
+      const pageRef = doc(db, 'pages', pageId);
+      await updateDoc(pageRef, {
+        followers: arrayUnion(userId)
+      });
+      return { followed: true };
+    });
+  }
+
+  static async likePage(pageId: string): Promise<ActionResponse> {
+    return this.execute('LIKE_PAGE', { pageId }, async (params, userId) => {
+      const { pageId } = params;
+      const pageRef = doc(db, 'pages', pageId);
+      await updateDoc(pageRef, {
+        likes: arrayUnion(userId)
+      });
+      return { liked: true };
+    });
+  }
+
+  static async createPagePost(pageId: string, text: string, mediaUrl?: string, mediaType?: string): Promise<ActionResponse> {
+    return this.execute('CREATE_PAGE_POST', { pageId, text, mediaUrl, mediaType }, async (params, userId) => {
+      const { pageId, text, mediaUrl, mediaType } = params;
+      const pageDoc = await getDoc(doc(db, 'pages', pageId));
+      if (pageDoc.data()?.ownerId !== userId) throw new Error('Unauthorized');
+
+      const postData = {
+        pageId,
+        userId, // The admin who posted
+        text,
+        mediaUrl,
+        mediaType,
+        likeCount: 0,
+        commentCount: 0,
+        createdAt: serverTimestamp()
+      };
+      const docRef = await addDoc(collection(db, `pages/${pageId}/posts`), postData);
+      return { postId: docRef.id };
     });
   }
 }

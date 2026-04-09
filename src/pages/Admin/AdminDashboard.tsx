@@ -21,6 +21,7 @@ interface UserProfile {
 interface Payment {
   id: string;
   userId: string;
+  userName?: string;
   amount: number;
   type: string;
   tier?: string;
@@ -368,7 +369,7 @@ const AdminDashboard: React.FC = () => {
                 {payments.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-8 py-6">
-                      <div className="font-black text-slate-900">User {p.userId.slice(0, 8)}</div>
+                      <div className="font-black text-slate-900">{p.userName || `User ${p.userId.slice(0, 8)}`}</div>
                       <div className="text-xs text-slate-400 font-bold uppercase tracking-widest">
                         {p.createdAt?.toDate?.()?.toLocaleDateString() || 'Recently'}
                       </div>

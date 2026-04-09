@@ -190,6 +190,19 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
+    match /pages/{pageId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin());
+
+      match /posts/{postId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && (get(/databases/$(database)/documents/pages/$(pageId)).data.ownerId == request.auth.uid || isAdmin());
+        allow update, delete: if isAuthenticated() && (get(/databases/$(database)/documents/pages/$(pageId)).data.ownerId == request.auth.uid || isAdmin());
+      }
+    }
+
     // Default deny
     match /{path=**} {
       allow read, write: if false;

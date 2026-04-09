@@ -252,7 +252,9 @@ const SwipeCard: React.FC<{ profile: DatingProfile, onSwipe: (dir: 'left' | 'rig
       <div className="absolute bottom-0 left-0 right-0 p-8 text-white pointer-events-none">
         <div className="flex items-end gap-3 mb-2">
           <div className="flex items-center gap-2">
-            <h2 className="text-4xl font-black">{profile.displayName}, {profile.age}</h2>
+            <Link to={`/profile/${profile.uid}`} className="hover:text-pink-400 transition-colors pointer-events-auto">
+              <h2 className="text-4xl font-black">{profile.displayName}, {profile.age}</h2>
+            </Link>
             {profile.isVerified && <Sparkles className="w-6 h-6 text-blue-400 fill-blue-400" />}
           </div>
           <div className="bg-green-500 w-3 h-3 rounded-full mb-2" />

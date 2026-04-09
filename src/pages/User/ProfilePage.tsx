@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet, X, Plus, Coins, RefreshCw } from 'lucide-react';
+import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet, X, Plus, Coins, RefreshCw, Crown } from 'lucide-react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDocs, or, and } from 'firebase/firestore';
@@ -102,6 +102,17 @@ export default function ProfilePage() {
 
     return () => unsubscribe();
   }, [user, userId, isOwnProfile]);
+
+  const [myPages, setMyPages] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (isOwnProfile && user) {
+      const q = query(collection(db, 'pages'), where('ownerId', '==', user.uid));
+      return onSnapshot(q, (snapshot) => {
+        setMyPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
+    }
+  }, [isOwnProfile, user]);
 
   const handleAddFriend = async () => {
     if (!user || !userId) return;
@@ -410,7 +421,7 @@ export default function ProfilePage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50 pt-28 pb-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <Link to="/" className="flex items-center gap-2 text-slate-600 hover:text-pink-500 transition-colors font-bold">
@@ -563,14 +574,46 @@ export default function ProfilePage() {
                             Convert to Cash
                           </button>
                         </div>
+
+                        {/* My Pages Section */}
+                        {isOwnProfile && myPages.length > 0 && (
+                          <div className="pt-6 border-t border-slate-100 space-y-3">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">My Pages</span>
+                              <div className="space-y-2">
+                                {myPages.map(page => (
+                                  <Link 
+                                    key={page.id} 
+                                    to={`/pages/${page.id}`}
+                                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-all group"
+                                  >
+                                    <div className="w-8 h-8 rounded-lg bg-pink-50 overflow-hidden flex-shrink-0">
+                                      {page.photoURL ? (
+                                        <img src={page.photoURL} alt="" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-pink-500 font-black text-[10px]">
+                                          {page.name[0]}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <span className="text-xs font-bold text-slate-700 truncate group-hover:text-pink-500 transition-colors">{page.name}</span>
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
                 <div className="flex-1 text-center md:text-left pt-16 md:pt-0">
                   <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-                    <h2 className="text-2xl font-black text-slate-900">
+                    <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2">
                       {isOwnProfile ? (formData.firstName || formData.lastName ? `${formData.firstName} ${formData.lastName}` : 'Set your name') : targetUser?.displayName}
+                      {targetUser?.email === 'FRANCISMUGEBE@gmail.com' && (
+                        <Crown className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                      )}
                     </h2>
                     {targetUser?.proTier && targetUser.proTier !== 'none' && (
                       <div className="flex items-center gap-2">

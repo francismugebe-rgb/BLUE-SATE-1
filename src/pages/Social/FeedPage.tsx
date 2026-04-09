@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, getDoc, where } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles, Camera, Zap, TrendingUp, Clock, DollarSign, X, UserCheck, Megaphone, ExternalLink } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, MoreHorizontal, MapPin, Sparkles, Camera, Zap, TrendingUp, Clock, DollarSign, X, UserCheck, Megaphone, ExternalLink, Crown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import LoadingScreen from '../../components/LoadingScreen';
 import imageCompression from 'browser-image-compression';
@@ -31,6 +31,7 @@ interface Post {
   displayName?: string;
   photoURL?: string;
   isVerified?: boolean;
+  isSuperAdmin?: boolean;
   isBoosted?: boolean;
   isSponsored?: boolean;
   boostUntil?: any;
@@ -425,8 +426,9 @@ const FeedPage: React.FC = () => {
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <Link to={`/profile/${post.userId}`} className="hover:text-pink-500 transition-colors">
+                              <Link to={`/profile/${post.userId}`} className="hover:text-pink-500 transition-colors flex items-center gap-1">
                                 <h3 className="font-black text-slate-900 leading-none">{post.displayName}</h3>
+                                {post.isSuperAdmin && <Crown className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
                               </Link>
                               {post.isVerified && <Sparkles className="w-3 h-3 text-blue-500 fill-blue-500" />}
                               {user?.friends?.includes(post.userId) && (

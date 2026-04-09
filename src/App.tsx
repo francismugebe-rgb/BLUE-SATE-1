@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useState, useRef, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Heart, Sparkles, ArrowRight, Shield, Zap, Users, LogOut, MessageCircle, User, Play, MapPin, Bell, ChevronDown, Settings, ShieldCheck, Wallet, Megaphone } from 'lucide-react';
+import { Heart, Sparkles, ArrowRight, Shield, Zap, Users, LogOut, MessageCircle, User, Play, MapPin, Bell, ChevronDown, Settings, ShieldCheck, Wallet, Megaphone, Layout } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Lazy load pages
@@ -13,6 +13,8 @@ const ReelsPage = lazy(() => import('./pages/Social/ReelsPage'));
 const DatingPage = lazy(() => import('./pages/Dating/DatingPage'));
 const ChatPage = lazy(() => import('./pages/Social/ChatPage'));
 const AdsPage = lazy(() => import('./pages/User/AdsPage'));
+const PagesPage = lazy(() => import('./pages/Social/PagesPage'));
+const PageDetailPage = lazy(() => import('./pages/Social/PageDetailPage'));
 
 import { collection, query, where, orderBy, limit, onSnapshot, getDocs, updateDoc, doc, arrayUnion, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './lib/firebase';
@@ -35,7 +37,7 @@ const ProfileCompletionGuard: React.FC<{ children: React.ReactNode }> = ({ child
   // If user hasn't filled in Name and Surname, redirect to profile
   const isProfileIncomplete = !user.firstName || !user.lastName;
   
-  if (isProfileIncomplete && location.pathname !== '/profile') {
+  if (isProfileIncomplete && !location.pathname.startsWith('/profile')) {
     return <Navigate to="/profile" state={{ from: location, incomplete: true }} />;
   }
 
@@ -133,6 +135,7 @@ const Navigation: React.FC = () => {
 
   const navItems = [
     { path: '/feed', icon: Users, label: 'Home' },
+    { path: '/pages', icon: Layout, label: 'Pages' },
     { path: '/reels', icon: Zap, label: 'Reels' },
     { path: '/dating', icon: Heart, label: 'Dating' },
     { path: '/chat', icon: MessageCircle, label: 'Chat' },
@@ -767,6 +770,22 @@ const AuthConsumer: React.FC = () => {
             element={
               <ProtectedRoute>
                 <AdsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/pages" 
+            element={
+              <ProtectedRoute>
+                <PagesPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/pages/:pageId" 
+            element={
+              <ProtectedRoute>
+                <PageDetailPage />
               </ProtectedRoute>
             } 
           />
