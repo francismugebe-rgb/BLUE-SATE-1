@@ -38,6 +38,8 @@ const ReelsPage: React.FC = () => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadForm, setUploadForm] = useState({ caption: '', hashtags: '' });
   const [loading, setLoading] = useState(true);
   const [feedType, setFeedType] = useState<'for-you' | 'following'>('for-you');
   const [isMuted, setIsMuted] = useState(true);
@@ -118,14 +120,18 @@ const ReelsPage: React.FC = () => {
     await ActionService.followUser(targetId);
   };
 
-  const handleUploadReel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate duration (simplified check via video element)
+    if (file.size > 3 * 1024 * 1024) {
+      alert("Video size must be less than 3MB.");
+      return;
+    }
+
     const video = document.createElement('video');
     video.preload = 'metadata';
-    video.onloadedmetadata = async () => {
+    video.onloadedmetadata = () => {
       window.URL.revokeObjectURL(video.src);
       if (video.duration > 180) {
         alert("Video must be less than 3 minutes.");
@@ -136,54 +142,59 @@ const ReelsPage: React.FC = () => {
         return;
       }
 
-      setIsUploading(true);
-      
-      // Create local preview
+      setUploadFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setUploadPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!response.ok) throw new Error('Upload failed');
-
-        const { url } = await response.json();
-        
-        await addDoc(collection(db, 'reels'), {
-          userId: user.uid,
-          displayName: user.displayName,
-          photoURL: user.photoURL || '',
-          isSuperAdmin: user.email === 'FRANCISMUGEBE@gmail.com',
-          videoUrl: url,
-          caption: "Check out my new reel! #HeartConnect",
-          likes: [],
-          views: 0,
-          commentCount: 0,
-          duration: video.duration,
-          createdAt: serverTimestamp()
-        });
-
-        await awardPoints(20);
-        alert("Reel uploaded successfully!");
-        setUploadPreview(null);
-      } catch (error) {
-        console.error("Error uploading reel:", error);
-        alert("Failed to upload reel. Please try again.");
-        setUploadPreview(null);
-      } finally {
-        setIsUploading(false);
-      }
     };
     video.src = URL.createObjectURL(file);
+  };
+
+  const handlePublishReel = async () => {
+    if (!uploadFile || !user) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const { url } = await response.json();
+      
+      const finalCaption = `${uploadForm.caption} ${uploadForm.hashtags}`.trim();
+
+      await addDoc(collection(db, 'reels'), {
+        userId: user.uid,
+        displayName: user.displayName,
+        photoURL: user.photoURL || '',
+        isSuperAdmin: user.email === 'FRANCISMUGEBE@gmail.com',
+        videoUrl: url,
+        caption: finalCaption || "Check out my new reel! #HeartConnect",
+        likes: [],
+        views: 0,
+        commentCount: 0,
+        createdAt: serverTimestamp()
+      });
+
+      await awardPoints(20);
+      alert("Reel published successfully!");
+      setUploadPreview(null);
+      setUploadFile(null);
+      setUploadForm({ caption: '', hashtags: '' });
+    } catch (error) {
+      console.error("Error publishing reel:", error);
+      alert("Failed to publish reel. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleShare = (reelId: string) => {
@@ -321,7 +332,7 @@ const ReelsPage: React.FC = () => {
         <label className="flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded-full font-bold cursor-pointer hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20">
           <Plus className="w-5 h-5" />
           <span>Upload</span>
-          <input type="file" accept="video/*" className="hidden" onChange={handleUploadReel} disabled={isUploading} />
+          <input type="file" accept="video/*" className="hidden" onChange={handleFileSelect} disabled={isUploading} />
         </label>
       </div>
 
@@ -395,14 +406,88 @@ const ReelsPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {isUploading && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center">
-          <div className="text-center max-w-xs w-full px-6">
-            {uploadPreview && (
-              <div className="aspect-[9/16] w-full bg-slate-900 rounded-2xl overflow-hidden mb-6 shadow-2xl border border-white/10">
+      {/* Upload Modal */}
+      <AnimatePresence>
+        {uploadPreview && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-[2.5rem] overflow-hidden max-w-4xl w-full flex flex-col md:flex-row shadow-2xl"
+            >
+              <div className="md:w-1/2 aspect-[9/16] bg-black relative">
                 <video src={uploadPreview} className="w-full h-full object-cover" autoPlay muted loop />
+                <button 
+                  onClick={() => { setUploadPreview(null); setUploadFile(null); }}
+                  className="absolute top-4 left-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-md transition-all"
+                >
+                  <X className="w-6 h-6" />
+                </button>
               </div>
-            )}
+              
+              <div className="md:w-1/2 p-8 flex flex-col">
+                <div className="flex-1 space-y-6">
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 mb-2">Publish Reel</h3>
+                    <p className="text-slate-500 font-medium text-sm">Share your moment with the world.</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700 ml-1">Caption</label>
+                      <textarea 
+                        value={uploadForm.caption}
+                        onChange={(e) => setUploadForm({...uploadForm, caption: e.target.value})}
+                        placeholder="What's on your mind?"
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium resize-none h-32 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700 ml-1">Hashtags</label>
+                      <input 
+                        type="text"
+                        value={uploadForm.hashtags}
+                        onChange={(e) => setUploadForm({...uploadForm, hashtags: e.target.value})}
+                        placeholder="#trending #love #reels"
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-8 flex gap-4">
+                  <button 
+                    onClick={() => { setUploadPreview(null); setUploadFile(null); }}
+                    className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all text-sm"
+                  >
+                    Discard
+                  </button>
+                  <button 
+                    onClick={handlePublishReel}
+                    disabled={isUploading}
+                    className="flex-1 py-4 bg-pink-500 text-white rounded-2xl font-bold hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20 flex items-center justify-center gap-2 text-sm"
+                  >
+                    {isUploading ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Send className="w-5 h-5" />
+                        Publish
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {isUploading && !uploadPreview && (
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center">
+          <div className="text-center max-w-xs w-full px-6">
             <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-white font-bold">Uploading Reel...</p>
           </div>

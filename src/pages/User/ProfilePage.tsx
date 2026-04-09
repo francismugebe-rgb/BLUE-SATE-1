@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet, X, Plus, Coins, RefreshCw, Crown } from 'lucide-react';
+import { User, MapPin, Calendar, Heart, Sparkles, Save, ArrowLeft, Zap, Camera, Image as ImageIcon, UserPlus, UserMinus, MessageCircle, UserCheck, Wallet, X, Plus, Coins, RefreshCw, Crown, Settings } from 'lucide-react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDocs, or, and } from 'firebase/firestore';
@@ -543,6 +543,16 @@ export default function ProfilePage() {
                   
                   {isOwnProfile && (
                     <div className="mt-6 flex flex-col gap-4 w-full">
+                      {!isEditing && (
+                        <button 
+                          onClick={() => setIsEditing(true)}
+                          className="w-full py-4 bg-pink-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-pink-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20"
+                        >
+                          <Settings className="w-4 h-4" />
+                          Edit Profile
+                        </button>
+                      )}
+                      
                       <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
                         {/* Wallet Section */}
                         <div className="space-y-3">
@@ -592,7 +602,7 @@ export default function ProfilePage() {
                                         <img src={page.photoURL} alt="" className="w-full h-full object-cover" />
                                       ) : (
                                         <div className="w-full h-full flex items-center justify-center text-pink-500 font-black text-[10px]">
-                                          {page.name[0]}
+                                          {page.name?.charAt(0) || 'P'}
                                         </div>
                                       )}
                                     </div>
@@ -952,6 +962,45 @@ export default function ProfilePage() {
                   className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all font-medium disabled:opacity-70"
                   placeholder="Hiking, Cooking, Travel..."
                 />
+              </div>
+
+              {/* Reels Section */}
+              <div className="mt-12">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center text-pink-500">
+                      <Zap className="w-5 h-5 fill-pink-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900">Reels</h3>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Short Videos</p>
+                    </div>
+                  </div>
+                  {isOwnProfile && (
+                    <Link 
+                      to="/reels" 
+                      className="flex items-center gap-2 px-4 py-2 bg-pink-500 text-white rounded-xl font-bold text-sm hover:bg-pink-600 transition-all shadow-lg shadow-pink-500/20"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Upload Reel
+                    </Link>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {/* We could fetch and show user's reels here, but for now we'll just show the upload button if empty */}
+                  {isOwnProfile && (
+                    <Link 
+                      to="/reels"
+                      className="aspect-[9/16] rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-3 hover:bg-slate-100 hover:border-pink-300 transition-all group"
+                    >
+                      <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-slate-400 group-hover:text-pink-500 transition-colors">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <span className="text-xs font-black text-slate-400 uppercase tracking-widest group-hover:text-pink-500 transition-colors">Add Reel</span>
+                    </Link>
+                  )}
+                </div>
               </div>
 
               {/* Pro Upgrade Section */}
